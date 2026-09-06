@@ -6,8 +6,13 @@ com consulta incremental, validação, idempotência e recuperação de falhas p
 
 A estrutura inicial (SCRUM-178) inclui Python, dependências, configuração e Dockerfile.
 A SCRUM-179 adiciona conexões com os dois PostgreSQL e Firebase Admin SDK.
-O comando atual valida configuração e acesso aos três serviços, libera os recursos
-e encerra. Sincronização, controle incremental e agendamento ficam para as próximas subtarefas.
+A SCRUM-180 consulta funcionários, empresa, departamento e e-mails no legado.
+O comando atual valida acesso aos três serviços, percorre os funcionários em lotes,
+registra somente quantidades, libera recursos e encerra. Transformação,
+sincronização, controle incremental e agendamento ficam para as próximas subtarefas.
+
+Os campos, critérios de seleção e decisões pendentes estão documentados em
+[Campos de usuários do legado](docs/campos-usuarios-legado.md).
 
 ## Execução local
 
@@ -101,8 +106,8 @@ um arquivo de lock com todas as versões transitivas fixadas.
 app/
   config/settings.py   # Leitura e validação das variáveis
   database/connections.py # Engines PostgreSQL e teste de conexão
-  models/              # Futuros modelos de usuários
-  repositories/        # Futuras consultas e persistência
+  models/legacy_user.py # Dados brutos do funcionário e seus e-mails
+  repositories/legacy_user_repository.py # Consulta do legado por lotes
   services/firebase_service.py # Credenciais e acesso ao Firebase Auth
   services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada
@@ -119,6 +124,7 @@ O carregamento tipado do ambiente utiliza
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Os testes automatizados usam serviços simulados, sem ler credenciais reais nem
-acessar a rede. Para validar o ambiente real, execute `python -m app.main` com
+Os testes automatizados usam serviços simulados e SQLite em memória para executar
+as consultas, sem ler credenciais reais nem acessar a rede.
+Para validar o ambiente real, execute `python -m app.main` com
 o `.env` preenchido e os serviços acessíveis.

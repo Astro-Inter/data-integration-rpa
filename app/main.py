@@ -3,9 +3,11 @@
 import logging
 
 from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import Settings
 from app.services.integrations import IntegrationError, open_integrations
+from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserRepository
 
 
 def main() -> int:
@@ -37,11 +39,21 @@ def main() -> int:
         settings.sync_dry_run,
     )
     try:
-        with open_integrations(settings):
+        with open_integrations(settings) as integrations:
             logger.info("Conexões PostgreSQL e acesso ao Firebase Authentication validados.")
+            total = 0
+            with integrations.legacy.connect() as connection:
+                repository = LegacyUserRepository(connection)
+                for batch in repository.iter_batches(settings.sync_batch_size):
+                    total += len(batch)
+                    logger.debug("Lote consultado: %s funcionários.", len(batch))
+            logger.info("Consulta do legado concluída: %s funcionários encontrados.", total)
             logger.warning("Sincronização ainda não implementada. Nenhum registro foi alterado.")
-    except IntegrationError as exc:
+    except (IntegrationError, LegacyReadError) as exc:
         logger.error("%s", exc)
+        return 1
+    except SQLAlchemyError:
+        logger.error("Falha de conexão durante a leitura do legado. Verifique acesso ao banco.")
         return 1
     return 0
 

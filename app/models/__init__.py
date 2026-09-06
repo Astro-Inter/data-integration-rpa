@@ -1,1 +1,1 @@
-"""Camada reservada aos modelos de validação dos usuários."""
+"""Contratos dos dados consultados e futuros modelos de validação."""

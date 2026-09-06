@@ -1,1 +1,1 @@
-"""Camada reservada às consultas e à persistência dos dados."""
+"""Consultas ao legado e futura persistência no destino."""
