@@ -1,1 +1,1 @@
-"""Camada reservada às conexões com PostgreSQL legado e destino."""
+"""Conexões com PostgreSQL legado e destino."""

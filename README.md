@@ -4,9 +4,10 @@ Integração planejada entre PostgreSQL legado, Firebase Authentication e
 PostgreSQL destino. O escopo inicial contempla usuários e seus dados relacionados,
 com consulta incremental, validação, idempotência e recuperação de falhas parciais.
 
-Esta entrega (SCRUM-178) prepara a estrutura Python, as dependências, a configuração
-e o Dockerfile. O comando atual apenas valida a configuração e encerra: conexões,
-sincronização, controle incremental e agendamento serão implementados nas próximas subtarefas.
+A estrutura inicial (SCRUM-178) inclui Python, dependências, configuração e Dockerfile.
+A SCRUM-179 adiciona conexões com os dois PostgreSQL e Firebase Admin SDK.
+O comando atual valida configuração e acesso aos três serviços, libera os recursos
+e encerra. Sincronização, controle incremental e agendamento ficam para as próximas subtarefas.
 
 ## Execução local
 
@@ -50,8 +51,34 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 Todos os campos de Firebase e banco são obrigatórios, exceto portas com padrão.
 A configuração carrega `SYNC_DRY_RUN`, mas a execução de simulação depende da
 implementação futura do fluxo. Nesta etapa, nenhum modo altera sistemas externos.
-As credenciais Firebase serão decodificadas e verificadas na etapa de integração;
-a configuração inicial verifica apenas seu preenchimento.
+As credenciais Firebase são decodificadas em memória: devem ser um JSON de conta
+de serviço válido e pertencer ao `FIREBASE_PROJECT_ID` informado. Nenhum arquivo
+temporário de credenciais é criado.
+
+## Conexões e integrações
+
+`python -m app.main` inicializa uma instância própria do Firebase Admin SDK,
+executa `SELECT 1` em cada PostgreSQL e realiza uma consulta ao Firebase
+Authentication limitada a um usuário. Essa consulta verifica autenticação e
+permissão de leitura, não imprime dados pessoais e não cria usuários.
+O serviço Firebase Authentication deve estar habilitado, e a conta de serviço
+deve ter permissão para listar usuários. Inicializar o SDK isoladamente não
+comprova acesso remoto; a consulta realiza essa verificação.
+
+Os engines usam SQLAlchemy com psycopg, URLs estruturadas para preservar senhas
+com caracteres especiais, verificação de conexões do pool, timeout de conexão
+de 10 segundos e limite de consulta de 30 segundos. O legado é configurado com
+transações somente de leitura. O destino também usa somente leitura quando
+`SYNC_DRY_RUN=true`; o fluxo futuro deverá respeitar essa opção no Firebase.
+Mantenha permissões de leitura no usuário do legado como proteção no próprio banco.
+
+Falhas identificam a integração afetada sem exibir mensagens brutas dos provedores
+ou credenciais e retornam código 1. Engines e instância Firebase são liberados
+inclusive quando uma etapa intermediária falha. Sucesso retorna código 0 e
+confirma apenas acesso, não permissões de escrita ou sincronização concluída.
+
+Referências: [engines SQLAlchemy](https://docs.sqlalchemy.org/en/20/core/engines.html)
+e [Firebase Admin SDK](https://firebase.google.com/docs/reference/admin/python/firebase_admin).
 
 Base64 é uma codificação, não criptografia. Não versione `.env`, senhas ou contas
 de serviço. No GitHub Actions, as credenciais deverão vir de GitHub Secrets.
@@ -73,10 +100,11 @@ um arquivo de lock com todas as versões transitivas fixadas.
 ```text
 app/
   config/settings.py   # Leitura e validação das variáveis
-  database/            # Futuras conexões PostgreSQL
+  database/connections.py # Engines PostgreSQL e teste de conexão
   models/              # Futuros modelos de usuários
   repositories/        # Futuras consultas e persistência
-  services/            # Futuro fluxo de sincronização e Firebase
+  services/firebase_service.py # Credenciais e acesso ao Firebase Auth
+  services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada
 ```
 
@@ -90,3 +118,7 @@ O carregamento tipado do ambiente utiliza
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe -m pip check
 ```
+
+Os testes automatizados usam serviços simulados, sem ler credenciais reais nem
+acessar a rede. Para validar o ambiente real, execute `python -m app.main` com
+o `.env` preenchido e os serviços acessíveis.

@@ -1,1 +1,1 @@
-"""Camada reservada à sincronização e à integração com Firebase."""
+"""Integrações externas e futuro fluxo de sincronização."""

@@ -66,7 +66,7 @@ class SettingsTests(unittest.TestCase):
         self.assertIn("legacy_db_port", " ".join(logs.output))
 
     def test_startup_explicitly_reports_unimplemented_sync(self):
-        with patch("app.main.Settings", return_value=self.load()):
+        with patch("app.main.Settings", return_value=self.load()), patch("app.main.open_integrations"):
             with self.assertLogs(level="INFO") as logs:
                 self.assertEqual(main(), 0)
         self.assertIn("Sincronização ainda não implementada", " ".join(logs.output))
