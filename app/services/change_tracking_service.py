@@ -20,7 +20,7 @@ def user_fingerprint(user: LegacyUser) -> str:
     payload["emails"] = sorted(payload["emails"], key=lambda email: email["id_email"])
     # A versão faz uma mudança futura do contrato provocar novo processamento.
     serialized = json.dumps(
-        {"version": 2, "user": payload}, ensure_ascii=False, sort_keys=True,
+        {"version": 3, "user": payload}, ensure_ascii=False, sort_keys=True,
         separators=(",", ":"),
     )
     return sha256(serialized.encode("utf-8")).hexdigest()

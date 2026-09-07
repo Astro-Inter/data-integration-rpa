@@ -82,8 +82,9 @@ externa e reverte também os registros anteriores. O processador da SCRUM-181
 agora recebe PreparedUser, não LegacyUser.
 
 O serviço de criação/localização Firebase da SCRUM-183 consome esses dados;
-veja [Usuários no Firebase](usuarios-firebase.md). A execução principal ainda
-é prévia até conectar a persistência no destino. Endereços não são preparados: a relação
+veja [Usuários no Firebase](usuarios-firebase.md). A SCRUM-184 conecta a
+[persistência no destino](persistencia-destino.md) ao fluxo principal.
+Endereços não são preparados: a relação
 é opcional, mas quando existe exige campos que não podem ser resolvidos a partir
 dos inteiros do legado sem suas tabelas de referência. Também ficam fora CNAE,
 riscos, NRs, certificados, treinamentos, fotos e administradores.

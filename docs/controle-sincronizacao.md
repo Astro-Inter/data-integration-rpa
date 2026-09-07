@@ -19,7 +19,7 @@ todos os e-mails. Os e-mails são ordenados pelo ID, portanto uma simples mudan�
 na ordem da coleção não causa reprocessamento. Valores nulos, vazios, repetições
 e espaços são preservados no hash. A normalização da SCRUM-182 é aplicada depois
 da comparação, sem modificar o retrato bruto usado pelo controle.
-O conteúdo inclui uma versão do contrato (2 desde a SCRUM-182); uma alteração desse contrato deverá
+O conteúdo inclui uma versão do contrato (3 desde a SCRUM-184); uma alteração desse contrato deverá
 incrementar a versão para reprocessar os registros antigos.
 
 O controle evita repetir o processamento de dados confirmados, mas não elimina a
@@ -51,7 +51,7 @@ Com o `.env` preenchido, execute uma vez na raiz do projeto:
 ```
 
 O comando exige `SYNC_DRY_RUN=false` e permissão de criação no PostgreSQL destino.
-Cria apenas as duas tabelas de controle, se ausentes; não acessa Firebase nem
+Cria as tabelas de controle e `rpa_user_links` (SCRUM-184), se ausentes; não acessa Firebase nem
 legado e não migra usuários. Repetir o comando preserva o histórico existente.
 Não é um mecanismo de atualização de schema: futuras mudanças das tabelas
 precisarão de migração específica.
@@ -68,15 +68,13 @@ assumir que todos os usuários são novos.
 
 ## Detecção e confirmação são etapas distintas
 
-O `main` atual calcula as quantidades de novos, alterados e inalterados e consulta
-a última sincronização confirmada. Ainda não fornece um processador de usuários,
-portanto não grava hashes nem avança datas, inclusive com `SYNC_DRY_RUN=false`.
-Até a implementação da persistência, um usuário sem histórico continua aparecendo
-como novo nas próximas execuções. Isso evita considerar sincronizado um usuário
-que foi apenas lido.
+Desde a SCRUM-184, o `main` fornece um processador completo. Com
+`SYNC_DRY_RUN=false`, persiste usuários/relações e confirma hashes e datas na mesma
+transação. Com `true`, apenas detecta e valida, sem avançar o histórico.
+Veja [Persistência no destino](persistencia-destino.md).
 
 `ChangeTrackingService.run(..., process_user=...)` oferece o ponto de integração
-para as próximas subtarefas. O processador recebe `PreparedUser` validado pela
+utilizado no `main`. O processador recebe `PreparedUser` validado pela
 SCRUM-182 e deverá concluir a operação Firebase e
 a persistência do usuário e relações usando a conexão destino recebida. Só deve
 retornar em caso de sucesso; em falhas, deve lançar uma exceção.
@@ -100,7 +98,7 @@ real bem-sucedida sem alterações, a data global avança, mas as datas por usu�
 permanecem na última vez em que cada um foi processado.
 
 Firebase não participa da transação PostgreSQL. Se uma operação Firebase funcionar
-e o banco falhar depois, a integração futura deve localizar/reutilizar essa conta
+e o banco falhar depois, a integração deve localizar/reutilizar essa conta
 na tentativa seguinte. O controle não tenta desfazer contas Firebase.
 A SCRUM-183 fornece `FirebaseUserService` e `UserSyncProcessor` para esse fluxo;
 veja [Usuários no Firebase](usuarios-firebase.md). O adaptador exige resolução de

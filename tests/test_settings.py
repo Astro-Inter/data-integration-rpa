@@ -65,16 +65,16 @@ class SettingsTests(unittest.TestCase):
         self.assertNotIn("segredo-invalido", " ".join(logs.output))
         self.assertIn("legacy_db_port", " ".join(logs.output))
 
-    def test_startup_explicitly_reports_unimplemented_sync(self):
+    def test_startup_reports_simulation(self):
         with (
-            patch("app.main.Settings", return_value=self.load()),
+            patch("app.main.Settings", return_value=self.load(SYNC_DRY_RUN="true")),
             patch("app.main.open_integrations"),
             patch("app.main.LegacyUserRepository") as repository,
         ):
             repository.return_value.iter_batches.return_value = iter(())
             with self.assertLogs(level="INFO") as logs:
                 self.assertEqual(main(), 0)
-        self.assertIn("Sincronização ainda não implementada", " ".join(logs.output))
+        self.assertIn("Simulação concluída", " ".join(logs.output))
 
 
 if __name__ == "__main__":

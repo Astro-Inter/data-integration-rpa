@@ -48,7 +48,7 @@ a conta original ou vincular outra identidade pelo novo endereço.
 ## Ligação com a persistência
 
 `UserSyncProcessor` é um callback compatível com `ChangeTrackingService.run`.
-Sua construção exige dois callbacks da próxima etapa:
+Sua construção exige dois callbacks, implementados pela SCRUM-184 em `TargetUserRepository`:
 
 - `resolve_identity(prepared, connection) -> str | None`: verifica conflitos de
   CPF/e-mail/UID e propriedade da identidade no destino; retorna o UID já vinculado
@@ -76,9 +76,9 @@ Não há exclusão automática de contas como compensação de rollback.
 
 ## Execução atual e simulação
 
-O `main` continua como prévia enquanto os callbacks de resolução e persistência
-do destino não forem implementados. Esta entrega disponibiliza o serviço e o
-adaptador, mas não ativa criação em massa separada da persistência.
+Desde a SCRUM-184, o `main` conecta o adaptador ao repositório destino e executa
+gravações quando `SYNC_DRY_RUN=false`. Com `true`, permanece como simulação.
+Veja [Persistência no destino](persistencia-destino.md) para preparação e limites.
 
 Para simular o serviço isoladamente, use
 `FirebaseUserService(app, dry_run=True).ensure_user(prepared)`: pode consultar,

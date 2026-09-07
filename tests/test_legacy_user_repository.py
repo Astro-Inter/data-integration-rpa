@@ -105,7 +105,7 @@ class LegacyUserRepositoryTests(unittest.TestCase):
     def test_main_counts_users_and_closes_connection(self):
         self.seed()
         self.read_only()
-        settings = test_settings.SettingsTests().load(SYNC_BATCH_SIZE='3')
+        settings = test_settings.SettingsTests().load(SYNC_BATCH_SIZE='3', SYNC_DRY_RUN='true')
         with patch('app.main.Settings', return_value=settings), patch('app.main.open_integrations') as integrations:
             connection_context = integrations.return_value.__enter__.return_value.legacy.connect.return_value
             connection_context.__enter__.return_value = self.connection

@@ -11,7 +11,9 @@ from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserR
 from app.repositories.sync_state_repository import SyncStateRepository
 from app.services.change_tracking_service import ChangeTrackingService
 from app.services.user_preparation_service import UserDataError
-from app.services.firebase_user_service import FirebaseUserError
+from app.services.firebase_user_service import FirebaseUserError, FirebaseUserService
+from app.services.user_sync_processor import UserSyncProcessor
+from app.repositories.target_user_repository import TargetIdentityError, TargetUserRepository
 
 
 def main() -> int:
@@ -47,8 +49,14 @@ def main() -> int:
             logger.info("Conexões PostgreSQL e acesso ao Firebase Authentication validados.")
             with integrations.legacy.connect() as connection, integrations.target.begin() as target:
                 repository = LegacyUserRepository(connection)
+                processor = UserSyncProcessor(
+                    FirebaseUserService(integrations.firebase, dry_run=settings.sync_dry_run),
+                    resolve_identity=lambda user, db: TargetUserRepository(db).resolve_identity(user),
+                    persist_user=lambda user, uid, db: TargetUserRepository(db).persist(user, uid),
+                )
                 summary = ChangeTrackingService(repository, SyncStateRepository(target)).run(
                     settings.sync_batch_size, dry_run=settings.sync_dry_run,
+                    process_user=processor,
                 )
             logger.info("Consulta do legado concluída: %s funcionários encontrados.", summary.total)
             logger.info("Novos: %s; alterados: %s; sem alteração: %s.",
@@ -57,10 +65,13 @@ def main() -> int:
             logger.info("Candidatos válidos: %s; inválidos: %s.", summary.validated, summary.invalid)
             for field, count in sorted(summary.validation_errors.items()):
                 logger.error("Falha de validação em %s: %s registros.", field, count)
-            logger.warning("Sincronização ainda não implementada. Nenhum registro foi alterado.")
+            if settings.sync_dry_run:
+                logger.info("Simulação concluída. Nenhum registro foi alterado.")
+            else:
+                logger.info("Sincronização concluída: %s usuários confirmados.", summary.confirmed)
             if summary.invalid:
                 return 1
-    except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError) as exc:
+    except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError, TargetIdentityError) as exc:
         logger.error("%s", exc)
         return 1
     except SQLAlchemyError:

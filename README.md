@@ -11,12 +11,12 @@ A SCRUM-181 compara hashes desses dados com o histórico confirmado no destino.
 A SCRUM-182 normaliza e valida os candidatos e prepara os dados de Firebase,
 workspace, unidade, cargo e usuário.
 A SCRUM-183 disponibiliza localização/criação idempotente de contas Firebase,
-recuperação do UID e um adaptador para a futura persistência no destino.
+recuperação do UID e um adaptador para persistência no destino.
 O comando atual valida acesso aos três serviços, percorre os funcionários em lotes,
 informa quantidades de novos, alterados e inalterados e a última sincronização.
-A persistência dos cadastros e o agendamento ficam para as próximas subtarefas.
-Enquanto essa persistência não existir, o comando funciona como prévia e não confirma
-hashes nem datas de sincronização.
+A SCRUM-184 conecta a persistência de workspace, unidade, cargo, usuário e vínculo
+legado/destino. `SYNC_DRY_RUN=false` executa a sincronização completa; `true` faz
+simulação sem gravar. O agendamento fica para a próxima subtarefa.
 
 Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
@@ -25,6 +25,7 @@ O protocolo de confirmação, preparação das tabelas e limites da comparação
 As decisões de campos e regras estão em [Mapeamento e validação](docs/mapeamento-e-validacao.md).
 O tratamento de contas existentes e a retomada de falhas estão em
 [Usuários no Firebase](docs/usuarios-firebase.md).
+Veja a preparação e as regras de identidade em [Persistência no destino](docs/persistencia-destino.md).
 O comando informa válidos/inválidos, agrupa erros por campo e retorna código 1
 quando algum candidato é inválido, mantendo-o pendente.
 
@@ -39,6 +40,7 @@ python -m venv .venv
 Copy-Item .env.example .env
 # Preencha o .env antes de executar.
 # Prepare as tabelas de controle no destino uma vez, com SYNC_DRY_RUN=false:
+# Repita também ao atualizar para SCRUM-184, para adicionar rpa_user_links.
 .\.venv\Scripts\python.exe -m app.database.init_sync_control
 .\.venv\Scripts\python.exe -m app.main
 ```
@@ -71,8 +73,9 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 
 Todos os campos de Firebase e banco são obrigatórios, exceto portas com padrão.
 `SYNC_DRY_RUN=true` permite detectar alterações sem chamar o processador nem
-alterar o controle. O `main` atual é uma prévia em ambos os modos; o comando
-separado `init_sync_control` cria as tabelas no destino e exige `false`.
+alterar o controle. Com `false`, o `main` cria/localiza contas Firebase e grava
+cadastros no destino. O comando separado `init_sync_control` prepara o controle
+e exige `false`.
 As credenciais Firebase são decodificadas em memória: devem ser um JSON de conta
 de serviço válido e pertencer ao `FIREBASE_PROJECT_ID` informado. Nenhum arquivo
 temporário de credenciais é criado.
@@ -91,13 +94,13 @@ Os engines usam SQLAlchemy com psycopg, URLs estruturadas para preservar senhas
 com caracteres especiais, verificação de conexões do pool, timeout de conexão
 de 10 segundos e limite de consulta de 30 segundos. O legado é configurado com
 transações somente de leitura. O destino também usa somente leitura quando
-`SYNC_DRY_RUN=true`; o fluxo futuro deverá respeitar essa opção no Firebase.
+`SYNC_DRY_RUN=true`; nesse modo o processador de gravação/Firebase não é chamado.
 Mantenha permissões de leitura no usuário do legado como proteção no próprio banco.
 
 Falhas identificam a integração afetada sem exibir mensagens brutas dos provedores
 ou credenciais e retornam código 1. Engines e instância Firebase são liberados
 inclusive quando uma etapa intermediária falha. Sucesso retorna código 0 e
-confirma apenas acesso, não permissões de escrita ou sincronização concluída.
+confirma a simulação ou sincronização, conforme o modo informado nos logs.
 
 Referências: [engines SQLAlchemy](https://docs.sqlalchemy.org/en/20/core/engines.html)
 e [Firebase Admin SDK](https://firebase.google.com/docs/reference/admin/python/firebase_admin).
@@ -129,11 +132,12 @@ app/
   models/prepared_user.py # Dados validados e payloads dos destinos
   repositories/legacy_user_repository.py # Consulta do legado por lotes
   repositories/sync_state_repository.py # Hashes e última sincronização
+  repositories/target_user_repository.py # Identidade e persistência das relações
   services/change_tracking_service.py # Detecção e protocolo de confirmação
   services/user_preparation_service.py # Mapeamento e validação
   services/firebase_service.py # Credenciais e acesso ao Firebase Auth
   services/firebase_user_service.py # Localizar/criar conta e recuperar UID
-  services/user_sync_processor.py # Firebase e callbacks da futura persistência
+  services/user_sync_processor.py # Firebase e persistência transacional
   services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada
 ```

@@ -60,7 +60,8 @@ O limite inicial não cria um snapshot: alterações e exclusões concorrentes p
 aparecer entre consultas; a consistência necessária será tratada com essa estratégia.
 
 `python -m app.main` verifica as integrações e percorre a consulta, exibindo somente
-quantidades. Os lotes ainda não são persistidos nem enviados ao Firebase.
+quantidades. Desde a SCRUM-184, os candidatos validados são sincronizados com
+Firebase e destino quando `SYNC_DRY_RUN=false`; `true` mantém apenas a simulação.
 
 ## Fora da seleção atual
 

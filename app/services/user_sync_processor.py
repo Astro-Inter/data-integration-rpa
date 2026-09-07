@@ -1,4 +1,4 @@
-"""Liga o Firebase à futura persistência, sem confirmar sincronização prematura."""
+"""Liga o Firebase à persistência, sem confirmar sincronização prematura."""
 
 from collections.abc import Callable
 
