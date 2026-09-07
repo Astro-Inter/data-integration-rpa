@@ -53,7 +53,13 @@ class SettingsTests(unittest.TestCase):
                 self.load(**{field: value})
 
     def test_environment_overrides_example_file(self):
-        with patch.dict(os.environ, ENV | {"SYNC_BATCH_SIZE": "23"}, clear=True):
+        # O exemplo contém placeholders vazios; o ambiente fornece a configuração.
+        overrides = {
+            "SYNC_BATCH_SIZE": "23", "SMTP_HOST": "smtp.example.com",
+            "SMTP_PORT": "587", "SMTP_USER": "alerta@example.com",
+            "EMAIL_FROM": "alerta@example.com", "EMAIL_TO": "alerta@example.com",
+        }
+        with patch.dict(os.environ, ENV | overrides, clear=True):
             settings = Settings(_env_file=".env.example")
         self.assertEqual(settings.sync_batch_size, 23)
         self.assertEqual(settings.legacy_db_port, 5432)
