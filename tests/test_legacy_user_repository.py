@@ -110,7 +110,8 @@ class LegacyUserRepositoryTests(unittest.TestCase):
             connection_context = integrations.return_value.__enter__.return_value.legacy.connect.return_value
             connection_context.__enter__.return_value = self.connection
             with self.assertLogs(level='INFO') as logs:
-                self.assertEqual(main(), 0)
+                # Os dados brutos desta fixture contêm documentos/e-mails inválidos.
+                self.assertEqual(main(), 1)
             connection_context.__exit__.assert_called_once()
         output = ' '.join(logs.output)
         self.assertIn('4 funcionários encontrados', output)

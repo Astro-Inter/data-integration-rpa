@@ -10,6 +10,7 @@ from app.services.integrations import IntegrationError, open_integrations
 from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserRepository
 from app.repositories.sync_state_repository import SyncStateRepository
 from app.services.change_tracking_service import ChangeTrackingService
+from app.services.user_preparation_service import UserDataError
 
 
 def main() -> int:
@@ -52,8 +53,13 @@ def main() -> int:
             logger.info("Novos: %s; alterados: %s; sem alteração: %s.",
                         summary.new, summary.changed, summary.unchanged)
             logger.info("Última sincronização confirmada: %s.", summary.last_synced_at or "nenhuma")
+            logger.info("Candidatos válidos: %s; inválidos: %s.", summary.validated, summary.invalid)
+            for field, count in sorted(summary.validation_errors.items()):
+                logger.error("Falha de validação em %s: %s registros.", field, count)
             logger.warning("Sincronização ainda não implementada. Nenhum registro foi alterado.")
-    except (IntegrationError, LegacyReadError) as exc:
+            if summary.invalid:
+                return 1
+    except (IntegrationError, LegacyReadError, UserDataError) as exc:
         logger.error("%s", exc)
         return 1
     except SQLAlchemyError:

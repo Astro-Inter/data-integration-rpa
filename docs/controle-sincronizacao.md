@@ -17,8 +17,9 @@ percorrendo o legado em lotes e compara um SHA-256 dos campos da SCRUM-180 com o
 O hash considera nome, CPF, cargo, empresa, departamento, seus identificadores e
 todos os e-mails. Os e-mails são ordenados pelo ID, portanto uma simples mudança
 na ordem da coleção não causa reprocessamento. Valores nulos, vazios, repetições
-e espaços são preservados. A normalização de negócio fica para a etapa seguinte.
-O conteúdo inclui uma versão do contrato; uma alteração desse contrato deverá
+e espaços são preservados no hash. A normalização da SCRUM-182 é aplicada depois
+da comparação, sem modificar o retrato bruto usado pelo controle.
+O conteúdo inclui uma versão do contrato (2 desde a SCRUM-182); uma alteração desse contrato deverá
 incrementar a versão para reprocessar os registros antigos.
 
 O controle evita repetir o processamento de dados confirmados, mas não elimina a
@@ -75,7 +76,8 @@ como novo nas próximas execuções. Isso evita considerar sincronizado um usuá
 que foi apenas lido.
 
 `ChangeTrackingService.run(..., process_user=...)` oferece o ponto de integração
-para as próximas subtarefas. O processador deverá concluir a operação Firebase e
+para as próximas subtarefas. O processador recebe `PreparedUser` validado pela
+SCRUM-182 e deverá concluir a operação Firebase e
 a persistência do usuário e relações usando a conexão destino recebida. Só deve
 retornar em caso de sucesso; em falhas, deve lançar uma exceção.
 

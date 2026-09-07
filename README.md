@@ -8,9 +8,11 @@ A estrutura inicial (SCRUM-178) inclui Python, dependências, configuração e D
 A SCRUM-179 adiciona conexões com os dois PostgreSQL e Firebase Admin SDK.
 A SCRUM-180 consulta funcionários, empresa, departamento e e-mails no legado.
 A SCRUM-181 compara hashes desses dados com o histórico confirmado no destino.
+A SCRUM-182 normaliza e valida os candidatos e prepara os dados de Firebase,
+workspace, unidade, cargo e usuário.
 O comando atual valida acesso aos três serviços, percorre os funcionários em lotes,
 informa quantidades de novos, alterados e inalterados e a última sincronização.
-Transformação, persistência de usuários e agendamento ficam para as próximas subtarefas.
+A persistência dos cadastros e o agendamento ficam para as próximas subtarefas.
 Enquanto essa persistência não existir, o comando funciona como prévia e não confirma
 hashes nem datas de sincronização.
 
@@ -18,6 +20,9 @@ Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
 O protocolo de confirmação, preparação das tabelas e limites da comparação estão em
 [Controle de sincronização](docs/controle-sincronizacao.md).
+As decisões de campos e regras estão em [Mapeamento e validação](docs/mapeamento-e-validacao.md).
+O comando informa válidos/inválidos, agrupa erros por campo e retorna código 1
+quando algum candidato é inválido, mantendo-o pendente.
 
 ## Execução local
 
@@ -117,9 +122,11 @@ app/
   database/sync_schema.py # Tabelas do histórico confirmado no destino
   database/init_sync_control.py # Preparação explícita das tabelas de controle
   models/legacy_user.py # Dados brutos do funcionário e seus e-mails
+  models/prepared_user.py # Dados validados e payloads dos destinos
   repositories/legacy_user_repository.py # Consulta do legado por lotes
   repositories/sync_state_repository.py # Hashes e última sincronização
   services/change_tracking_service.py # Detecção e protocolo de confirmação
+  services/user_preparation_service.py # Mapeamento e validação
   services/firebase_service.py # Credenciais e acesso ao Firebase Auth
   services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada

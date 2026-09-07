@@ -22,19 +22,18 @@ nem escreve em Firebase ou PostgreSQL destino.
 | `departamento.id_empresa` | `departamento_id_empresa` | Permite detectar departamento vinculado a empresa diferente da do funcionário. |
 | `email.id_email`, `email.email` | `emails` | Coleção de registros de e-mail, ordenada por `id_email`. |
 
-Empresa → workspace e departamento → unidade são possibilidades de mapeamento,
-não regras de negócio já implementadas. Cargo e departamento devem ser avaliados
-no contexto da empresa; nomes iguais em empresas diferentes não significam a
-mesma entidade. A definição de `tipo`, `modalidade`, `status`, `ativo`, datas e
-Firebase UID ocorrerá nas etapas de transformação e persistência.
+A SCRUM-182 definiu empresa → workspace e departamento → unidade, com cargo e
+unidade vinculados ao workspace da empresa. Nomes iguais em empresas diferentes
+não significam a mesma entidade. Veja as regras de criação em
+[Mapeamento e validação](mapeamento-e-validacao.md).
 
 ## E-mails e relações
 
 O legado permite vários e-mails por funcionário, inclusive registros nulos,
 vazios ou repetidos, sem indicar o principal. Todos são preservados sem escolher
 arbitrariamente um login. Funcionários sem e-mail retornam `emails=()` e seguem
-para avaliação futura. A etapa de validação definirá elegibilidade e escolha do
-e-mail antes de criar a conta Firebase.
+para validação. A SCRUM-182 exige um único e-mail válido após normalização e
+deduplicação, sem escolher arbitrariamente entre endereços distintos.
 
 Empresa e departamento usam `LEFT JOIN`: uma referência ausente não elimina
 silenciosamente o funcionário. Dados da relação ausente ficam como `None`;

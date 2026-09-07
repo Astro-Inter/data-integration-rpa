@@ -16,10 +16,10 @@ import test_settings
 
 def user(legacy_id=1):
     return LegacyUser(
-        id_funcionario=legacy_id, cpf="00000000001", nome="Ana", cargo="Analista",
-        id_empresa=1, empresa_nome="Empresa A", empresa_cnpj="00123456000100",
+        id_funcionario=legacy_id, cpf="52998224725", nome="Ana", cargo="Analista",
+        id_empresa=1, empresa_nome="Empresa A", empresa_cnpj="11222333000181",
         id_departamento=10, departamento_nome="Operação", departamento_id_empresa=1,
-        emails=(LegacyEmail(1, "ana@example.test"), LegacyEmail(2, None)),
+        emails=(LegacyEmail(1, "ana@example.com"), LegacyEmail(2, None)),
     )
 
 
@@ -43,7 +43,7 @@ class ChangeTrackingTests(unittest.TestCase):
         connection.execute(text("""
             INSERT INTO destino_teste VALUES (:id, :nome)
             ON CONFLICT(id) DO UPDATE SET nome = EXCLUDED.nome
-        """), {"id": item.id_funcionario, "nome": item.nome})
+        """), {"id": item.legacy_id, "nome": item.usuario.nome})
 
     def state(self):
         with self.engine.connect() as connection:
@@ -73,7 +73,7 @@ class ChangeTrackingTests(unittest.TestCase):
         process.assert_not_called()
         third = self.run_sync([replace(user(1), cargo="Gestora"), user(2), user(3)], processor=process)
         self.assertEqual((third.new, third.changed, third.unchanged, third.confirmed), (1, 1, 1, 2))
-        self.assertEqual([call.args[0].id_funcionario for call in process.call_args_list], [1, 3])
+        self.assertEqual([call.args[0].legacy_id for call in process.call_args_list], [1, 3])
         with self.engine.connect() as connection:
             self.assertEqual(connection.execute(text("SELECT COUNT(*) FROM destino_teste")).scalar_one(), 3)
 
@@ -107,7 +107,7 @@ class ChangeTrackingTests(unittest.TestCase):
         before, last = self.state(), self.last_sync()
         def failing_process(item, connection):
             self.persist(item, connection)
-            if item.id_funcionario == 2:
+            if item.legacy_id == 2:
                 raise RuntimeError("Firebase indisponível")
         with self.assertRaises(RuntimeError):
             self.run_sync([replace(user(), nome="Alterada"), user(2)], processor=failing_process)
@@ -189,3 +189,19 @@ class ChangeTrackingTests(unittest.TestCase):
                     self.assertEqual(init_control(), 1)
                 create.return_value.dispose.assert_called_once()
                 self.assertNotIn("senha-secreta", " ".join(logs.output))
+
+    def test_validation_preview_leaves_invalid_pending(self):
+        summary = self.run_sync([user(), replace(user(2), nome=" ")])
+        self.assertEqual((summary.validated, summary.invalid, summary.confirmed), (1, 1, 0))
+        self.assertEqual(summary.validation_errors, {"usuario.nome": 1})
+        self.assertEqual(self.state(), [])
+        self.assertIsNone(self.last_sync())
+
+    def test_invalid_later_user_rolls_back_earlier_valid_user(self):
+        from app.services.user_preparation_service import UserDataError
+        with self.assertRaises(UserDataError):
+            self.run_sync([user(), replace(user(2), cpf="00000000000")], processor=self.persist)
+        self.assertEqual(self.state(), [])
+        self.assertIsNone(self.last_sync())
+        with self.engine.connect() as connection:
+            self.assertEqual(connection.execute(text("SELECT COUNT(*) FROM destino_teste")).scalar_one(), 0)
