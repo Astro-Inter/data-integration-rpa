@@ -6,7 +6,7 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class FirebaseSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -17,6 +17,11 @@ class Settings(BaseSettings):
 
     firebase_project_id: str = Field(min_length=1)
     firebase_credentials_base64: SecretStr = Field(min_length=1)
+    firestore_database_id: str = Field(default="(default)", min_length=1, pattern=r"^[^/]+$")
+
+
+class Settings(FirebaseSettings):
+    firestore_logs_enabled: bool = True
 
     legacy_db_host: str = Field(min_length=1)
     legacy_db_port: int = Field(default=5432, ge=1, le=65535)

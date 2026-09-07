@@ -8,10 +8,10 @@ from uuid import uuid4
 import firebase_admin
 from firebase_admin import auth, credentials
 
-from app.config.settings import Settings
+from app.config.settings import FirebaseSettings
 
 
-def initialize_firebase(settings: Settings) -> firebase_admin.App:
+def initialize_firebase(settings: FirebaseSettings) -> firebase_admin.App:
     try:
         decoded = base64.b64decode(
             settings.firebase_credentials_base64.get_secret_value(), validate=True

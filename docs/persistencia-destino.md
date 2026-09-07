@@ -7,6 +7,10 @@ O modo `true` continua apenas consultando e validando os candidatos, sem criar
 contas, relações, vínculos ou histórico. A simulação não verifica os conflitos de
 identidade do destino nem comprova permissões de escrita.
 
+O histórico acima se refere ao controle de sincronização no PostgreSQL. Os
+[logs operacionais no Firestore](logs-firestore.md) são independentes e também
+são gravados nas simulações quando habilitados.
+
 ## Preparação e execução
 
 O banco destino deve conter as tabelas e constraints da aplicação fornecidas

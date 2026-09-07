@@ -33,7 +33,7 @@ class RunLifecycleTests(unittest.TestCase):
         self.addCleanup(engine.dispose)
         with engine.begin() as db:
             db.execute(text("CREATE TABLE checkpoint (id INTEGER)"))
-        def interrupted():
+        def interrupted(execution):
             with engine.begin() as db:
                 db.execute(text("INSERT INTO checkpoint VALUES (1)"))
                 _terminate(signal.SIGTERM, None)

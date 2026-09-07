@@ -19,6 +19,8 @@ legado/destino. `SYNC_DRY_RUN=false` executa a sincronização completa; `true` 
 simulação sem gravar. A SCRUM-185 adiciona CI, execução manual/agendada no GitHub
 Actions, imagem de testes, dependências fixadas, logs de execução e encerramento
 controlado. A ativação está descrita em [Automação e operação](docs/automacao-e-operacao.md).
+O histórico das execuções também é salvo no Firestore em `rpa_execucoes`, conforme
+[Logs no Firestore](docs/logs-firestore.md).
 
 Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
@@ -59,6 +61,8 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 | --- | --- |
 | `FIREBASE_PROJECT_ID` | Projeto do Firebase Authentication. |
 | `FIREBASE_CREDENTIALS_BASE64` | JSON da conta de serviço codificado em Base64; segredo obrigatório. |
+| `FIRESTORE_DATABASE_ID` | Banco de logs Firestore; padrão `(default)`. |
+| `FIRESTORE_LOGS_ENABLED` | Salvar histórico operacional no Firestore; padrão `true`. |
 | `LEGACY_DB_HOST` | Servidor PostgreSQL legado. |
 | `LEGACY_DB_PORT` | Porta do legado; padrão `5432`. |
 | `LEGACY_DB_NAME` | Nome do banco legado. |
@@ -78,6 +82,8 @@ Todos os campos de Firebase e banco são obrigatórios, exceto portas com padrã
 alterar o controle. Com `false`, o `main` cria/localiza contas Firebase e grava
 cadastros no destino. O comando separado `init_sync_control` prepara o controle
 e exige `false`.
+O histórico operacional do Firestore é gravado também em `SYNC_DRY_RUN=true`;
+para uma simulação sem qualquer gravação remota, use também `FIRESTORE_LOGS_ENABLED=false`.
 As credenciais Firebase são decodificadas em memória: devem ser um JSON de conta
 de serviço válido e pertencer ao `FIREBASE_PROJECT_ID` informado. Nenhum arquivo
 temporário de credenciais é criado.

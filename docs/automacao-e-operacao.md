@@ -78,6 +78,12 @@ O workflow publica o resultado no resumo do job. Mensagens brutas de drivers,
 SDKs e exceções inesperadas não são impressas, pois podem conter dados pessoais
 ou segredos. O Actions fixa `LOG_LEVEL=INFO`.
 
+O [histórico Firestore](logs-firestore.md) salva etapas, contagens e resultado em
+`rpa_execucoes/{run_id}`, inclusive na simulação. O workflow repassa as variáveis
+`FIRESTORE_DATABASE_ID` (padrão `(default)`) e `FIRESTORE_LOGS_ENABLED` (padrão `true`).
+A conta de serviço precisa de permissão para gravar no Firestore. Uma falha no
+histórico é informada no terminal e não interrompe a sincronização.
+
 Todas as gravações no PostgreSQL destino de uma execução continuam na mesma
 transação. Uma falha no segundo lote também reverte o primeiro, incluindo
 workspace, unidade, cargo, usuário, vínculo e hashes. A última sincronização só

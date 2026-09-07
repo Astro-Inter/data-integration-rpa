@@ -18,9 +18,10 @@ from app.services.user_preparation_service import UserDataError
 from app.services.firebase_user_service import FirebaseUserError, FirebaseUserService
 from app.services.user_sync_processor import UserSyncProcessor
 from app.repositories.target_user_repository import TargetIdentityError, TargetUserRepository
+from app.services.execution_log import Event, ExecutionLog
 
 
-def run() -> int:
+def run(execution: ExecutionLog) -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -42,6 +43,7 @@ def run() -> int:
     # DEBUG do RPA não habilita logs de SQL, tokens ou respostas dos provedores.
     for name in ("sqlalchemy", "firebase_admin", "google", "urllib3", "httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
+    execution.configure(settings)
     logger.info("Configuração inicial validada.")
     logger.info(
         "Lote: %s; modo de teste solicitado: %s.",
@@ -49,9 +51,12 @@ def run() -> int:
         settings.sync_dry_run,
     )
     try:
+        execution.event(Event.CONNECTING)
         with open_integrations(settings) as integrations:
+            execution.event(Event.CONNECTED)
             logger.info("Conexões PostgreSQL e acesso ao Firebase Authentication validados.")
             with integrations.legacy.connect() as connection, integrations.target.begin() as target:
+                execution.event(Event.PROCESSING)
                 repository = LegacyUserRepository(connection)
                 processor = UserSyncProcessor(
                     FirebaseUserService(integrations.firebase, dry_run=settings.sync_dry_run),
@@ -62,6 +67,8 @@ def run() -> int:
                     settings.sync_batch_size, dry_run=settings.sync_dry_run,
                     process_user=processor,
                 )
+            execution.event(Event.COMMITTED)
+            execution.summary(summary)
             logger.info("Consulta do legado concluída: %s funcionários encontrados.", summary.total)
             logger.info("Novos: %s; alterados: %s; sem alteração: %s.",
                         summary.new, summary.changed, summary.unchanged)
@@ -70,15 +77,24 @@ def run() -> int:
             for field, count in sorted(summary.validation_errors.items()):
                 logger.error("Falha de validação em %s: %s registros.", field, count)
             if settings.sync_dry_run:
-                logger.info("Simulação concluída. Nenhum registro foi alterado.")
+                logger.info("Simulação concluída. Nenhum cadastro ou controle de sincronização foi alterado.")
             else:
                 logger.info("Sincronização concluída: %s usuários confirmados.", summary.confirmed)
             if summary.invalid:
+                execution.event(Event.VALIDATION_ERROR)
                 return 1
     except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError, TargetIdentityError) as exc:
+        execution.event({
+            IntegrationError: Event.INTEGRATION_ERROR,
+            LegacyReadError: Event.LEGACY_ERROR,
+            UserDataError: Event.VALIDATION_ERROR,
+            FirebaseUserError: Event.FIREBASE_ERROR,
+            TargetIdentityError: Event.IDENTITY_ERROR,
+        }[type(exc)])
         logger.error("%s", exc)
         return 1
     except SQLAlchemyError:
+        execution.event(Event.DATABASE_ERROR)
         logger.error("Falha de acesso aos bancos ou ao controle. Verifique as tabelas rpa_sync_control e rpa_sync_users no destino.")
         return 1
     return 0
@@ -96,6 +112,7 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logger = logging.getLogger(__name__)
     run_id = uuid4().hex
+    execution = ExecutionLog(run_id)
     started = monotonic()
     code = 1
     previous = None
@@ -103,17 +120,24 @@ def main() -> int:
         previous = signal.signal(signal.SIGTERM, _terminate)
     logger.info("Execução iniciada: run_id=%s.", run_id)
     try:
-        code = run()
+        code = run(execution)
     except RunInterrupted:
         code = 143
+        execution.event(Event.INTERRUPTED)
         logger.error("Execução interrompida por SIGTERM; transações abertas serão revertidas.")
     except KeyboardInterrupt:
         code = 130
+        execution.event(Event.INTERRUPTED)
         logger.error("Execução interrompida pelo operador.")
     except Exception:
+        execution.event(Event.UNEXPECTED_ERROR)
         # Inclusive falhas inesperadas no encerramento: nunca despejar dados de SDK/SQL.
         logger.error("Falha inesperada na execução. Verifique serviços e configuração; nenhuma confirmação adicional será realizada.")
     finally:
+        try:
+            execution.finish(code, monotonic() - started)
+        finally:
+            execution.close()
         if previous is not None:
             signal.signal(signal.SIGTERM, previous)
         logger.log(logging.INFO if code == 0 else logging.ERROR,

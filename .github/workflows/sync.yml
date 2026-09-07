@@ -36,6 +36,8 @@ jobs:
         env:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
+          FIRESTORE_DATABASE_ID: ${{ vars.FIRESTORE_DATABASE_ID || '(default)' }}
+          FIRESTORE_LOGS_ENABLED: ${{ vars.FIRESTORE_LOGS_ENABLED || 'true' }}
           LEGACY_DB_HOST: ${{ secrets.LEGACY_DB_HOST }}
           LEGACY_DB_PORT: ${{ secrets.LEGACY_DB_PORT || '5432' }}
           LEGACY_DB_NAME: ${{ secrets.LEGACY_DB_NAME }}
@@ -53,6 +55,7 @@ jobs:
           timeout --signal=TERM --kill-after=30s 30m docker run --name rpa-sync-run --rm \
             --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
             -e FIREBASE_PROJECT_ID -e FIREBASE_CREDENTIALS_BASE64 \
+            -e FIRESTORE_DATABASE_ID -e FIRESTORE_LOGS_ENABLED \
             -e LEGACY_DB_HOST -e LEGACY_DB_PORT -e LEGACY_DB_NAME -e LEGACY_DB_USER -e LEGACY_DB_PASSWORD \
             -e TARGET_DB_HOST -e TARGET_DB_PORT -e TARGET_DB_NAME -e TARGET_DB_USER -e TARGET_DB_PASSWORD \
             -e SYNC_BATCH_SIZE -e SYNC_DRY_RUN -e LOG_LEVEL rpa-sync
