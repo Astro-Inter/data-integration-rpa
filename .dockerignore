@@ -1,0 +1,12 @@
+*
+!requirements.txt
+!requirements.lock
+!.env.example
+!tests/
+!tests/**
+!app/
+!app/**
+app/**/__pycache__/
+app/**/*.pyc
+tests/**/__pycache__/
+tests/**/*.pyc

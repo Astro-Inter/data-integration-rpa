@@ -1,0 +1,82 @@
+name: Sincronizar usuarios
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Simular sem gravar Firebase ou PostgreSQL
+        type: boolean
+        default: true
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rpa-usuarios-legado
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    # Habilitar somente depois de preparar controle, secrets e acesso de rede.
+    if: github.event_name == 'workflow_dispatch' || vars.RPA_SCHEDULE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: rpa
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Construir imagem
+        run: docker build --target runtime -t rpa-sync .
+      - name: Executar sincronizacao
+        timeout-minutes: 32
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
+          FIRESTORE_DATABASE_ID: ${{ vars.FIRESTORE_DATABASE_ID || '(default)' }}
+          FIRESTORE_LOGS_ENABLED: ${{ vars.FIRESTORE_LOGS_ENABLED || 'true' }}
+          LEGACY_DB_HOST: ${{ secrets.LEGACY_DB_HOST }}
+          LEGACY_DB_PORT: ${{ secrets.LEGACY_DB_PORT || '5432' }}
+          LEGACY_DB_NAME: ${{ secrets.LEGACY_DB_NAME }}
+          LEGACY_DB_USER: ${{ secrets.LEGACY_DB_USER }}
+          LEGACY_DB_PASSWORD: ${{ secrets.LEGACY_DB_PASSWORD }}
+          TARGET_DB_HOST: ${{ secrets.TARGET_DB_HOST }}
+          TARGET_DB_PORT: ${{ secrets.TARGET_DB_PORT || '5432' }}
+          TARGET_DB_NAME: ${{ secrets.TARGET_DB_NAME }}
+          TARGET_DB_USER: ${{ secrets.TARGET_DB_USER }}
+          TARGET_DB_PASSWORD: ${{ secrets.TARGET_DB_PASSWORD }}
+          SYNC_BATCH_SIZE: ${{ vars.SYNC_BATCH_SIZE || '100' }}
+          SYNC_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+          LOG_LEVEL: INFO
+          EMAIL_ALERTS_ENABLED: ${{ vars.EMAIL_ALERTS_ENABLED || 'true' }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ vars.SMTP_USER || 'app.4str0@gmail.com' }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'app.4str0@gmail.com' }}
+          EMAIL_TO: ${{ vars.EMAIL_TO || 'app.4str0@gmail.com' }}
+        run: |
+          timeout --signal=TERM --kill-after=30s 30m docker run --name rpa-sync-run --rm \
+            --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+            -e FIREBASE_PROJECT_ID -e FIREBASE_CREDENTIALS_BASE64 \
+            -e FIRESTORE_DATABASE_ID -e FIRESTORE_LOGS_ENABLED \
+            -e LEGACY_DB_HOST -e LEGACY_DB_PORT -e LEGACY_DB_NAME -e LEGACY_DB_USER -e LEGACY_DB_PASSWORD \
+            -e TARGET_DB_HOST -e TARGET_DB_PORT -e TARGET_DB_NAME -e TARGET_DB_USER -e TARGET_DB_PASSWORD \
+            -e SYNC_BATCH_SIZE -e SYNC_DRY_RUN -e LOG_LEVEL \
+            -e EMAIL_ALERTS_ENABLED -e SMTP_HOST -e SMTP_PORT -e SMTP_USER \
+            -e SMTP_PASSWORD -e EMAIL_FROM -e EMAIL_TO rpa-sync
+      - name: Encerrar container residual
+        if: always()
+        run: |
+          if docker container inspect rpa-sync-run >/dev/null 2>&1; then
+            docker stop --time 30 rpa-sync-run
+          fi
+      - name: Resumo
+        if: always()
+        env:
+          RESULTADO: ${{ job.status }}
+        run: |
+          printf 'Resultado do RPA: %s. Consulte os logs de inicio/fim e contagens desta execucao.\n' "$RESULTADO" >> "$GITHUB_STEP_SUMMARY"

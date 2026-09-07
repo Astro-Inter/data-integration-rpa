@@ -1,0 +1,44 @@
+name: Validar RPA
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rpa_test
+          POSTGRES_PASSWORD: rpa_test
+          POSTGRES_DB: rpa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rpa_test -d rpa_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Construir imagem de testes
+        run: docker build --target test -t rpa-test .
+      - name: Testar fluxo com PostgreSQL isolado
+        env:
+          TEST_POSTGRES_URL: postgresql+psycopg://rpa_test:rpa_test@127.0.0.1:5432/rpa_test
+        run: >-
+          docker run --rm --network host --read-only --tmpfs /tmp
+          -e TEST_POSTGRES_URL rpa-test
+      - name: Construir imagem de execução
+        run: docker build --target runtime -t rpa-runtime .
+      - name: Verificar isolamento da imagem final
+        run: >-
+          docker run --rm --network none --read-only rpa-runtime python -c
+          "import os,pathlib; assert os.getuid() != 0; assert not pathlib.Path('/app/.env').exists(); assert not pathlib.Path('/app/tests').exists(); import app.main"
