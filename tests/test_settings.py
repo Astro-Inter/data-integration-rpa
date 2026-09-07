@@ -11,6 +11,7 @@ from app.main import main
 
 
 ENV = {
+    "EMAIL_ALERTS_ENABLED": "false",
     "FIRESTORE_LOGS_ENABLED": "false",
     "FIREBASE_PROJECT_ID": "projeto-teste",
     "FIREBASE_CREDENTIALS_BASE64": "credencial-ficticia",

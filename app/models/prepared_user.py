@@ -22,11 +22,13 @@ def normalize_document(value: str, kind: str) -> str:
         raise ValueError("documento_obrigatorio")
     # Aceita apenas dígitos ASCII e caracteres de formatação conhecidos.
     if re.fullmatch(r"[0-9. /\-\s]+", value) is None:
-        raise ValueError("documento_invalido")
+        raise ValueError("documento_caracteres_invalidos")
     digits = re.sub(r"[. /\-\s]", "", value)
     size = 11 if kind == "cpf" else 14
-    if len(digits) != size or len(set(digits)) == 1:
-        raise ValueError("documento_invalido")
+    if len(digits) != size:
+        raise ValueError("documento_tamanho_invalido")
+    if len(set(digits)) == 1:
+        raise ValueError("documento_digitos_repetidos")
     weights = ([10, 9, 8, 7, 6, 5, 4, 3, 2], [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]) if kind == "cpf" else (
         [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
     )
@@ -34,7 +36,7 @@ def normalize_document(value: str, kind: str) -> str:
         remainder = sum(int(digit) * weight for digit, weight in zip(digits, sequence)) % 11
         expected = 0 if remainder < 2 else 11 - remainder
         if int(digits[size - 2 + index]) != expected:
-            raise ValueError("documento_invalido")
+            raise ValueError("documento_verificadores_invalidos")
     return digits
 
 

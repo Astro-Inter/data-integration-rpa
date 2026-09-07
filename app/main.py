@@ -3,6 +3,7 @@
 import logging
 import signal
 import threading
+from contextlib import ExitStack
 from time import monotonic
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from app.services.firebase_user_service import FirebaseUserError, FirebaseUserSe
 from app.services.user_sync_processor import UserSyncProcessor
 from app.repositories.target_user_repository import TargetIdentityError, TargetUserRepository
 from app.services.execution_log import Event, ExecutionLog
+from app.services.failure_alert import configure_email, send_failure_alert
 
 
 def run(execution: ExecutionLog) -> int:
@@ -27,11 +29,14 @@ def run(execution: ExecutionLog) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     logger = logging.getLogger(__name__)
+    report = execution.report
     try:
         settings = Settings()
     except ValidationError as exc:
+        configure_email(report)
         # Exibe apenas campos e tipos de erro, nunca valores fornecidos.
         for error in exc.errors(include_input=False, include_url=False):
+            report.add("Campo " + ".".join(str(part) for part in error["loc"]) + ": " + error["type"])
             logger.error(
                 "Configuração inválida: %s (%s)",
                 ".".join(str(part) for part in error["loc"]),
@@ -39,6 +44,8 @@ def run(execution: ExecutionLog) -> int:
             )
         return 1
 
+    configure_email(report, settings)
+    report.dry_run = settings.sync_dry_run
     logging.getLogger().setLevel(settings.log_level)
     # DEBUG do RPA não habilita logs de SQL, tokens ou respostas dos provedores.
     for name in ("sqlalchemy", "firebase_admin", "google", "urllib3", "httpx", "httpcore"):
@@ -55,18 +62,27 @@ def run(execution: ExecutionLog) -> int:
         with open_integrations(settings) as integrations:
             execution.event(Event.CONNECTED)
             logger.info("Conexões PostgreSQL e acesso ao Firebase Authentication validados.")
-            with integrations.legacy.connect() as connection, integrations.target.begin() as target:
+            with ExitStack() as connections:
+                report.set_stage("PostgreSQL legado", "Abrir conexão para leitura")
+                connection = connections.enter_context(integrations.legacy.connect())
+                report.set_stage("PostgreSQL destino", "Abrir transação de sincronização")
+                target = connections.enter_context(integrations.target.begin())
+                report.set_stage("PostgreSQL destino", "Consultar ou confirmar controle de sincronização")
                 execution.event(Event.PROCESSING)
                 repository = LegacyUserRepository(connection)
                 processor = UserSyncProcessor(
                     FirebaseUserService(integrations.firebase, dry_run=settings.sync_dry_run),
                     resolve_identity=lambda user, db: TargetUserRepository(db).resolve_identity(user),
                     persist_user=lambda user, uid, db: TargetUserRepository(db).persist(user, uid),
+                    on_stage=report.set_stage,
                 )
                 summary = ChangeTrackingService(repository, SyncStateRepository(target)).run(
                     settings.sync_batch_size, dry_run=settings.sync_dry_run,
                     process_user=processor,
+                    on_invalid=report.validation,
                 )
+                report.set_stage("PostgreSQL destino", "Commit e encerramento da transação")
+            report.committed = True
             execution.event(Event.COMMITTED)
             execution.summary(summary)
             logger.info("Consulta do legado concluída: %s funcionários encontrados.", summary.total)
@@ -84,6 +100,18 @@ def run(execution: ExecutionLog) -> int:
                 execution.event(Event.VALIDATION_ERROR)
                 return 1
     except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError, TargetIdentityError) as exc:
+        if isinstance(exc, IntegrationError):
+            report.add("Verifique configuração, credenciais, rede e permissões de acesso.", system=exc.system, stage=exc.stage)
+        elif isinstance(exc, LegacyReadError):
+            report.add("Falha na consulta de funcionario, empresa, departamento ou email. Confira tabelas e permissão SELECT.", system="PostgreSQL legado", stage="Consulta dos usuários")
+        elif isinstance(exc, UserDataError):
+            if not report.issues:
+                report.validation(exc)
+        elif isinstance(exc, FirebaseUserError):
+            # Estas exceções de domínio já contêm apenas mensagens controladas do RPA.
+            report.add(str(exc), system="Firebase Authentication")
+        else:
+            report.add(str(exc), system="PostgreSQL destino")
         execution.event({
             IntegrationError: Event.INTEGRATION_ERROR,
             LegacyReadError: Event.LEGACY_ERROR,
@@ -93,7 +121,18 @@ def run(execution: ExecutionLog) -> int:
         }[type(exc)])
         logger.error("%s", exc)
         return 1
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        state = getattr(getattr(exc, "orig", None), "sqlstate", None)
+        reasons = {
+            "23505": "Conflito de unicidade; um identificador já está cadastrado.",
+            "23503": "Referência a registro relacionado inexistente (chave estrangeira).",
+            "23514": "Uma regra CHECK do banco rejeitou os dados.",
+            "23502": "Campo obrigatório do banco não foi preenchido.",
+            "42P01": "Tabela inexistente; confira o schema e as tabelas de controle.",
+            "42501": "Permissão insuficiente no banco.",
+            "57014": "Consulta cancelada ou timeout atingido.",
+        }
+        report.add(reasons.get(state, "Falha SQL/conexão. Confira acesso, schema, constraints e controle de sincronização."))
         execution.event(Event.DATABASE_ERROR)
         logger.error("Falha de acesso aos bancos ou ao controle. Verifique as tabelas rpa_sync_control e rpa_sync_users no destino.")
         return 1
@@ -123,13 +162,16 @@ def main() -> int:
         code = run(execution)
     except RunInterrupted:
         code = 143
+        execution.report.add("Recebido SIGTERM; execução interrompida.")
         execution.event(Event.INTERRUPTED)
         logger.error("Execução interrompida por SIGTERM; transações abertas serão revertidas.")
     except KeyboardInterrupt:
         code = 130
+        execution.report.add("Interrupção pelo operador (Ctrl+C).")
         execution.event(Event.INTERRUPTED)
         logger.error("Execução interrompida pelo operador.")
     except Exception:
+        execution.report.add("Falha inesperada na etapa indicada; confira os logs e a disponibilidade das integrações.")
         execution.event(Event.UNEXPECTED_ERROR)
         # Inclusive falhas inesperadas no encerramento: nunca despejar dados de SDK/SQL.
         logger.error("Falha inesperada na execução. Verifique serviços e configuração; nenhuma confirmação adicional será realizada.")
@@ -140,6 +182,7 @@ def main() -> int:
             execution.close()
         if previous is not None:
             signal.signal(signal.SIGTERM, previous)
+        send_failure_alert(execution.report, code, monotonic() - started)
         logger.log(logging.INFO if code == 0 else logging.ERROR,
                    "Execução encerrada: run_id=%s exit_code=%s duracao_segundos=%.3f.",
                    run_id, code, monotonic() - started)

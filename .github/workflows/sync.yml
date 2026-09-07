@@ -51,6 +51,13 @@ jobs:
           SYNC_BATCH_SIZE: ${{ vars.SYNC_BATCH_SIZE || '100' }}
           SYNC_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
           LOG_LEVEL: INFO
+          EMAIL_ALERTS_ENABLED: ${{ vars.EMAIL_ALERTS_ENABLED || 'true' }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ vars.SMTP_USER || 'app.4str0@gmail.com' }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM || 'app.4str0@gmail.com' }}
+          EMAIL_TO: ${{ vars.EMAIL_TO || 'app.4str0@gmail.com' }}
         run: |
           timeout --signal=TERM --kill-after=30s 30m docker run --name rpa-sync-run --rm \
             --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
@@ -58,7 +65,9 @@ jobs:
             -e FIRESTORE_DATABASE_ID -e FIRESTORE_LOGS_ENABLED \
             -e LEGACY_DB_HOST -e LEGACY_DB_PORT -e LEGACY_DB_NAME -e LEGACY_DB_USER -e LEGACY_DB_PASSWORD \
             -e TARGET_DB_HOST -e TARGET_DB_PORT -e TARGET_DB_NAME -e TARGET_DB_USER -e TARGET_DB_PASSWORD \
-            -e SYNC_BATCH_SIZE -e SYNC_DRY_RUN -e LOG_LEVEL rpa-sync
+            -e SYNC_BATCH_SIZE -e SYNC_DRY_RUN -e LOG_LEVEL \
+            -e EMAIL_ALERTS_ENABLED -e SMTP_HOST -e SMTP_PORT -e SMTP_USER \
+            -e SMTP_PASSWORD -e EMAIL_FROM -e EMAIL_TO rpa-sync
       - name: Encerrar container residual
         if: always()
         run: |

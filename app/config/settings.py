@@ -2,11 +2,11 @@
 
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class FirebaseSettings(BaseSettings):
+class EnvironmentSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -15,12 +15,24 @@ class FirebaseSettings(BaseSettings):
         hide_input_in_errors=True,
     )
 
+
+class EmailSettings(EnvironmentSettings):
+    email_alerts_enabled: bool = True
+    smtp_host: str = Field(default="smtp.gmail.com", min_length=1)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_user: EmailStr = "app.4str0@gmail.com"
+    smtp_password: SecretStr = SecretStr("")
+    email_from: EmailStr = "app.4str0@gmail.com"
+    email_to: EmailStr = "app.4str0@gmail.com"
+
+
+class FirebaseSettings(EnvironmentSettings):
     firebase_project_id: str = Field(min_length=1)
     firebase_credentials_base64: SecretStr = Field(min_length=1)
     firestore_database_id: str = Field(default="(default)", min_length=1, pattern=r"^[^/]+$")
 
 
-class Settings(FirebaseSettings):
+class Settings(FirebaseSettings, EmailSettings):
     firestore_logs_enabled: bool = True
 
     legacy_db_host: str = Field(min_length=1)

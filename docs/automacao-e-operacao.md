@@ -84,6 +84,13 @@ O [histórico Firestore](logs-firestore.md) salva etapas, contagens e resultado 
 A conta de serviço precisa de permissão para gravar no Firestore. Uma falha no
 histórico é informada no terminal e não interrompe a sincronização.
 
+O [alerta por e-mail](alertas-email.md) usa `app.4str0@gmail.com` como remetente e
+destinatário. Configure o secret `SMTP_PASSWORD` no environment `rpa` ou no
+repositório. O workflow repassa também as variables opcionais `EMAIL_ALERTS_ENABLED`,
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `EMAIL_FROM` e `EMAIL_TO`, com os padrões
+documentados. O alerta inclui o sistema afetado, etapa, causas controladas,
+campos e IDs de registros inválidos, quando disponíveis.
+
 Todas as gravações no PostgreSQL destino de uma execução continuam na mesma
 transação. Uma falha no segundo lote também reverte o primeiro, incluindo
 workspace, unidade, cargo, usuário, vínculo e hashes. A última sincronização só

@@ -21,6 +21,8 @@ Actions, imagem de testes, dependências fixadas, logs de execução e encerrame
 controlado. A ativação está descrita em [Automação e operação](docs/automacao-e-operacao.md).
 O histórico das execuções também é salvo no Firestore em `rpa_execucoes`, conforme
 [Logs no Firestore](docs/logs-firestore.md).
+As falhas também geram [alerta por e-mail](docs/alertas-email.md) para
+`app.4str0@gmail.com`, usando a mesma conta como remetente após configurar SMTP.
 
 Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
@@ -76,6 +78,11 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 | `SYNC_BATCH_SIZE` | Quantidade de usuários por lote; inteiro positivo, padrão `100`. |
 | `SYNC_DRY_RUN` | Solicita simulação quando `true`; padrão existente `false`. |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` ou `CRITICAL`; padrão `INFO`. |
+| `EMAIL_ALERTS_ENABLED` | Ativa alertas de falha por e-mail; padrão `true`. |
+| `SMTP_HOST` / `SMTP_PORT` | Servidor SMTP com STARTTLS; padrão `smtp.gmail.com:587`. |
+| `SMTP_USER` | Conta autenticada; padrão `app.4str0@gmail.com`. |
+| `SMTP_PASSWORD` | Senha de app do Gmail, mantida em segredo. |
+| `EMAIL_FROM` / `EMAIL_TO` | Remetente e destinatário; ambos usam `app.4str0@gmail.com` por padrão. |
 
 Todos os campos de Firebase e banco são obrigatórios, exceto portas com padrão.
 `SYNC_DRY_RUN=true` permite detectar alterações sem chamar o processador nem
@@ -84,6 +91,8 @@ cadastros no destino. O comando separado `init_sync_control` prepara o controle
 e exige `false`.
 O histórico operacional do Firestore é gravado também em `SYNC_DRY_RUN=true`;
 para uma simulação sem qualquer gravação remota, use também `FIRESTORE_LOGS_ENABLED=false`.
+Erros na simulação também enviam alerta quando SMTP está configurado. Use
+`EMAIL_ALERTS_ENABLED=false` para desativar o envio.
 As credenciais Firebase são decodificadas em memória: devem ser um JSON de conta
 de serviço válido e pertencer ao `FIREBASE_PROJECT_ID` informado. Nenhum arquivo
 temporário de credenciais é criado.

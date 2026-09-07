@@ -47,6 +47,7 @@ class ChangeTrackingService:
     def run(
         self, batch_size: int, *, dry_run: bool = False,
         process_user: Callable[[PreparedUser, Connection], None] | None = None,
+        on_invalid: Callable[[UserDataError], None] | None = None,
     ) -> ChangeSummary:
         """Chamador deve usar target.begin(); falhas devem sair do bloco e dar rollback.
 
@@ -76,6 +77,8 @@ class ChangeTrackingService:
                 try:
                     prepared = prepare_user(user)
                 except UserDataError as exc:
+                    if on_invalid is not None:
+                        on_invalid(exc)
                     if confirm:
                         # A transação externa reverte inclusive usuários anteriores.
                         raise

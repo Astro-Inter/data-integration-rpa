@@ -9,6 +9,7 @@ from firebase_admin import firestore
 
 from app.config.settings import Settings
 from app.services.firebase_service import initialize_firebase
+from app.services.failure_alert import FailureReport
 
 
 class Event(StrEnum):
@@ -38,6 +39,7 @@ class ExecutionLog:
 
     def __init__(self, run_id: str):
         self.run_id = run_id
+        self.report = FailureReport(run_id)
         self._app = None
         self._client = None
         self._document = None
@@ -67,6 +69,8 @@ class ExecutionLog:
 
     def _disable(self) -> None:
         if not self._failed:
+            self.report.add("Não foi possível gravar ou encerrar o histórico. Confira banco, rede e permissão IAM; use os logs do terminal.",
+                            system="Firestore", stage="Histórico operacional")
             logging.getLogger(__name__).warning(
                 "Histórico Firestore indisponível: run_id=%s. Consulte os logs do terminal; "
                 "verifique banco e permissão da conta de serviço. A sincronização continuará.",
@@ -96,12 +100,13 @@ class ExecutionLog:
         self._save()
 
     def summary(self, summary) -> None:
-        if not self.available:
-            return
-        self._data["contagens"] = {
+        self.report.counts = {
             key: int(getattr(summary, key))
             for key in ("total", "new", "changed", "unchanged", "confirmed", "validated", "invalid")
         }
+        if not self.available:
+            return
+        self._data["contagens"] = self.report.counts
         self._save()
 
     def finish(self, exit_code: int, duration: float) -> None:
