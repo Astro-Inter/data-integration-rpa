@@ -16,7 +16,9 @@ O comando atual valida acesso aos três serviços, percorre os funcionários em 
 informa quantidades de novos, alterados e inalterados e a última sincronização.
 A SCRUM-184 conecta a persistência de workspace, unidade, cargo, usuário e vínculo
 legado/destino. `SYNC_DRY_RUN=false` executa a sincronização completa; `true` faz
-simulação sem gravar. O agendamento fica para a próxima subtarefa.
+simulação sem gravar. A SCRUM-185 adiciona CI, execução manual/agendada no GitHub
+Actions, imagem de testes, dependências fixadas, logs de execução e encerramento
+controlado. A ativação está descrita em [Automação e operação](docs/automacao-e-operacao.md).
 
 Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
@@ -35,7 +37,7 @@ Use Python 3.13 (versão da imagem Docker) ou superior. No PowerShell:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -c requirements.lock
 # Apenas se ainda não existir um .env:
 Copy-Item .env.example .env
 # Preencha o .env antes de executar.
@@ -106,19 +108,27 @@ Referências: [engines SQLAlchemy](https://docs.sqlalchemy.org/en/20/core/engine
 e [Firebase Admin SDK](https://firebase.google.com/docs/reference/admin/python/firebase_admin).
 
 Base64 é uma codificação, não criptografia. Não versione `.env`, senhas ou contas
-de serviço. No GitHub Actions, as credenciais deverão vir de GitHub Secrets.
+de serviço. No GitHub Actions, as credenciais vêm de GitHub Secrets.
 
 ## Docker
 
 ```powershell
 docker build -t data-integration-rpa .
-docker run --rm --env-file .env data-integration-rpa
+docker run --rm --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges --env-file .env data-integration-rpa
 ```
 
-O container executa como usuário sem privilégios. Apenas `app/` e
-`requirements.txt` entram no contexto de build; o `.env` é fornecido na execução.
-As dependências usam faixas compatíveis em `requirements.txt` e ainda não possuem
-um arquivo de lock com todas as versões transitivas fixadas.
+O container executa como usuário sem privilégios. O contexto contém apenas código,
+dependências, testes e `.env.example`; a imagem final exclui os testes e o exemplo.
+O `.env` real é fornecido somente na execução. `requirements.txt` define as faixas
+compatíveis e `requirements.lock` fixa as versões diretas e transitivas usadas no
+build. Atualize e valide ambos ao mudar dependências.
+
+Para executar os testes na mesma base Python da imagem de produção:
+
+```powershell
+docker build --target test -t data-integration-rpa-test .
+docker run --rm --read-only --tmpfs /tmp data-integration-rpa-test
+```
 
 ## Organização
 
@@ -153,7 +163,11 @@ O carregamento tipado do ambiente utiliza
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Os testes automatizados usam serviços simulados e SQLite em memória para executar
-as consultas, sem ler credenciais reais nem acessar a rede.
-Para validar o ambiente real, execute `python -m app.main` com
-o `.env` preenchido e os serviços acessíveis.
+Por padrão, os testes usam Firebase simulado e SQLite em memória, sem ler
+credenciais reais nem acessar a rede. Quatro testes adicionais usam PostgreSQL
+real quando `TEST_POSTGRES_URL` aponta para um banco de testes descartável. O CI
+configura esse banco automaticamente e testa criação, repetição, atualização,
+herança, bloqueios, rollback e recuperação após falha parcial. Firebase continua
+simulado. Veja os comandos e limites em [Automação e operação](docs/automacao-e-operacao.md).
+Para validar o acesso aos serviços reais sem gravar, execute `python -m app.main`
+com o `.env` preenchido, serviços acessíveis e `SYNC_DRY_RUN=true`.

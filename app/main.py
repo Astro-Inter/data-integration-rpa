@@ -1,6 +1,10 @@
 """Ponto de entrada para configuração e verificação das integrações do RPA."""
 
 import logging
+import signal
+import threading
+from time import monotonic
+from uuid import uuid4
 
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +20,7 @@ from app.services.user_sync_processor import UserSyncProcessor
 from app.repositories.target_user_repository import TargetIdentityError, TargetUserRepository
 
 
-def main() -> int:
+def run() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -78,6 +82,44 @@ def main() -> int:
         logger.error("Falha de acesso aos bancos ou ao controle. Verifique as tabelas rpa_sync_control e rpa_sync_users no destino.")
         return 1
     return 0
+
+
+class RunInterrupted(BaseException):
+    """Interrupção que faz rollback e não é convertida em erro pelos adaptadores."""
+
+
+def _terminate(signum, frame):
+    raise RunInterrupted()
+
+
+def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logger = logging.getLogger(__name__)
+    run_id = uuid4().hex
+    started = monotonic()
+    code = 1
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        previous = signal.signal(signal.SIGTERM, _terminate)
+    logger.info("Execução iniciada: run_id=%s.", run_id)
+    try:
+        code = run()
+    except RunInterrupted:
+        code = 143
+        logger.error("Execução interrompida por SIGTERM; transações abertas serão revertidas.")
+    except KeyboardInterrupt:
+        code = 130
+        logger.error("Execução interrompida pelo operador.")
+    except Exception:
+        # Inclusive falhas inesperadas no encerramento: nunca despejar dados de SDK/SQL.
+        logger.error("Falha inesperada na execução. Verifique serviços e configuração; nenhuma confirmação adicional será realizada.")
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
+        logger.log(logging.INFO if code == 0 else logging.ERROR,
+                   "Execução encerrada: run_id=%s exit_code=%s duracao_segundos=%.3f.",
+                   run_id, code, monotonic() - started)
+    return code
 
 
 if __name__ == "__main__":

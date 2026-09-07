@@ -106,9 +106,12 @@ simulando somente Firebase: criação, repetição sem duplicatas, adoção de u
 alteração de cargo/unidade, preservação de perfil e status, conflitos de CPF/UID,
 admin e conta, vínculos órfãos, rollback e execução pelo `main` nos dois modos.
 
-SQLite não comprova os comportamentos exclusivos de PostgreSQL, como herança,
-locks concorrentes e permissões/RLS. O ambiente PostgreSQL/Firebase real precisa
-ser validado com as configurações preenchidas; testes não criam contas reais.
+SQLite não comprova os comportamentos exclusivos de PostgreSQL. A SCRUM-185
+adiciona testes com PostgreSQL real para herança, locks, conexão somente de leitura
+e rollback/retomada do fluxo completo. Eles são habilitados por `TEST_POSTGRES_URL`
+e executados pelo CI, conforme [Automação e operação](automacao-e-operacao.md).
+Firebase permanece simulado; permissões/RLS e conectividade do ambiente de
+implantação precisam ser verificadas separadamente.
 
 Referências: [herança PostgreSQL](https://www.postgresql.org/docs/current/ddl-inherit.html)
 e [INSERT/ON CONFLICT](https://www.postgresql.org/docs/current/sql-insert.html).
