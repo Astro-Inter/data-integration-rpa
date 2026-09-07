@@ -121,7 +121,7 @@ class LegacyUserRepositoryTests(unittest.TestCase):
         self.seed()
         settings = test_settings.SettingsTests().load()
         def failed_batches(_):
-            yield [object()]
+            yield []
             raise LegacyReadError('Falha ao consultar funcionários no legado.')
         with (
             patch('app.main.Settings', return_value=settings),

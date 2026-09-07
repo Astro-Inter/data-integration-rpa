@@ -54,9 +54,9 @@ sem `OFFSET`. O maior ID no início limita a varredura, evitando que inserções
 IDs maiores prolonguem a execução. IDs zero, negativos e intervalos entre IDs são
 aceitos, pois o script permite inserir valores explícitos na coluna identity.
 
-Cada execução começa novamente: isso é paginação de uma leitura completa, não
-sincronização incremental nem checkpoint. Não existe `updated_at` no script
-fornecido; a estratégia de detecção de mudanças será definida na subtarefa seguinte.
+Cada execução começa novamente: a paginação lê todos os funcionários. Não existe
+`updated_at` no script fornecido. A SCRUM-181 adiciona comparação com hashes
+confirmados no destino; veja [Controle de sincronização](controle-sincronizacao.md).
 O limite inicial não cria um snapshot: alterações e exclusões concorrentes podem
 aparecer entre consultas; a consistência necessária será tratada com essa estratégia.
 

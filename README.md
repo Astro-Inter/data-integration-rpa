@@ -7,12 +7,17 @@ com consulta incremental, validação, idempotência e recuperação de falhas p
 A estrutura inicial (SCRUM-178) inclui Python, dependências, configuração e Dockerfile.
 A SCRUM-179 adiciona conexões com os dois PostgreSQL e Firebase Admin SDK.
 A SCRUM-180 consulta funcionários, empresa, departamento e e-mails no legado.
+A SCRUM-181 compara hashes desses dados com o histórico confirmado no destino.
 O comando atual valida acesso aos três serviços, percorre os funcionários em lotes,
-registra somente quantidades, libera recursos e encerra. Transformação,
-sincronização, controle incremental e agendamento ficam para as próximas subtarefas.
+informa quantidades de novos, alterados e inalterados e a última sincronização.
+Transformação, persistência de usuários e agendamento ficam para as próximas subtarefas.
+Enquanto essa persistência não existir, o comando funciona como prévia e não confirma
+hashes nem datas de sincronização.
 
 Os campos, critérios de seleção e decisões pendentes estão documentados em
 [Campos de usuários do legado](docs/campos-usuarios-legado.md).
+O protocolo de confirmação, preparação das tabelas e limites da comparação estão em
+[Controle de sincronização](docs/controle-sincronizacao.md).
 
 ## Execução local
 
@@ -24,6 +29,8 @@ python -m venv .venv
 # Apenas se ainda não existir um .env:
 Copy-Item .env.example .env
 # Preencha o .env antes de executar.
+# Prepare as tabelas de controle no destino uma vez, com SYNC_DRY_RUN=false:
+.\.venv\Scripts\python.exe -m app.database.init_sync_control
 .\.venv\Scripts\python.exe -m app.main
 ```
 
@@ -54,8 +61,9 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` ou `CRITICAL`; padrão `INFO`. |
 
 Todos os campos de Firebase e banco são obrigatórios, exceto portas com padrão.
-A configuração carrega `SYNC_DRY_RUN`, mas a execução de simulação depende da
-implementação futura do fluxo. Nesta etapa, nenhum modo altera sistemas externos.
+`SYNC_DRY_RUN=true` permite detectar alterações sem chamar o processador nem
+alterar o controle. O `main` atual é uma prévia em ambos os modos; o comando
+separado `init_sync_control` cria as tabelas no destino e exige `false`.
 As credenciais Firebase são decodificadas em memória: devem ser um JSON de conta
 de serviço válido e pertencer ao `FIREBASE_PROJECT_ID` informado. Nenhum arquivo
 temporário de credenciais é criado.
@@ -106,8 +114,12 @@ um arquivo de lock com todas as versões transitivas fixadas.
 app/
   config/settings.py   # Leitura e validação das variáveis
   database/connections.py # Engines PostgreSQL e teste de conexão
+  database/sync_schema.py # Tabelas do histórico confirmado no destino
+  database/init_sync_control.py # Preparação explícita das tabelas de controle
   models/legacy_user.py # Dados brutos do funcionário e seus e-mails
   repositories/legacy_user_repository.py # Consulta do legado por lotes
+  repositories/sync_state_repository.py # Hashes e última sincronização
+  services/change_tracking_service.py # Detecção e protocolo de confirmação
   services/firebase_service.py # Credenciais e acesso ao Firebase Auth
   services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada
