@@ -10,6 +10,8 @@ A SCRUM-180 consulta funcionários, empresa, departamento e e-mails no legado.
 A SCRUM-181 compara hashes desses dados com o histórico confirmado no destino.
 A SCRUM-182 normaliza e valida os candidatos e prepara os dados de Firebase,
 workspace, unidade, cargo e usuário.
+A SCRUM-183 disponibiliza localização/criação idempotente de contas Firebase,
+recuperação do UID e um adaptador para a futura persistência no destino.
 O comando atual valida acesso aos três serviços, percorre os funcionários em lotes,
 informa quantidades de novos, alterados e inalterados e a última sincronização.
 A persistência dos cadastros e o agendamento ficam para as próximas subtarefas.
@@ -21,6 +23,8 @@ Os campos, critérios de seleção e decisões pendentes estão documentados em
 O protocolo de confirmação, preparação das tabelas e limites da comparação estão em
 [Controle de sincronização](docs/controle-sincronizacao.md).
 As decisões de campos e regras estão em [Mapeamento e validação](docs/mapeamento-e-validacao.md).
+O tratamento de contas existentes e a retomada de falhas estão em
+[Usuários no Firebase](docs/usuarios-firebase.md).
 O comando informa válidos/inválidos, agrupa erros por campo e retorna código 1
 quando algum candidato é inválido, mantendo-o pendente.
 
@@ -128,6 +132,8 @@ app/
   services/change_tracking_service.py # Detecção e protocolo de confirmação
   services/user_preparation_service.py # Mapeamento e validação
   services/firebase_service.py # Credenciais e acesso ao Firebase Auth
+  services/firebase_user_service.py # Localizar/criar conta e recuperar UID
+  services/user_sync_processor.py # Firebase e callbacks da futura persistência
   services/integrations.py # Ciclo de vida das três integrações
   main.py              # Ponto de entrada
 ```

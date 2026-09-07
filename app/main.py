@@ -11,6 +11,7 @@ from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserR
 from app.repositories.sync_state_repository import SyncStateRepository
 from app.services.change_tracking_service import ChangeTrackingService
 from app.services.user_preparation_service import UserDataError
+from app.services.firebase_user_service import FirebaseUserError
 
 
 def main() -> int:
@@ -59,7 +60,7 @@ def main() -> int:
             logger.warning("Sincronização ainda não implementada. Nenhum registro foi alterado.")
             if summary.invalid:
                 return 1
-    except (IntegrationError, LegacyReadError, UserDataError) as exc:
+    except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError) as exc:
         logger.error("%s", exc)
         return 1
     except SQLAlchemyError:

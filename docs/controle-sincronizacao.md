@@ -102,6 +102,9 @@ permanecem na última vez em que cada um foi processado.
 Firebase não participa da transação PostgreSQL. Se uma operação Firebase funcionar
 e o banco falhar depois, a integração futura deve localizar/reutilizar essa conta
 na tentativa seguinte. O controle não tenta desfazer contas Firebase.
+A SCRUM-183 fornece `FirebaseUserService` e `UserSyncProcessor` para esse fluxo;
+veja [Usuários no Firebase](usuarios-firebase.md). O adaptador exige resolução de
+identidade e persistência antes de devolver sucesso ao controle.
 
 A varredura atual não é um snapshot do legado: alterações concorrentes podem
 aparecer entre páginas ou entre a consulta de funcionário e e-mails. Uma mudança
