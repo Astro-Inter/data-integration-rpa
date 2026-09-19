@@ -93,7 +93,7 @@ class OrganizationPayload(PreparedModel):
 
 class TargetPolicy(PreparedModel):
     """Valores de criação conforme constraints fornecidas; não aplicar em updates."""
-    tipo: Literal["FUNCIONARIO"] = "FUNCIONARIO"
+    tipo: Literal["COLABORADOR"] = "COLABORADOR"
     status: Literal["PRE_CADASTRADO"] = "PRE_CADASTRADO"
     modalidade: Annotated[str, BeforeValidator(clean_text), Field(min_length=2, max_length=50)] | None = None
 
@@ -102,7 +102,7 @@ class TargetUserPayload(UserData):
     firebase_uid: Annotated[str, Field(min_length=1, max_length=128)]
     cargo_id: Annotated[StrictInt, Field(gt=0)]
     unidade_id: Annotated[StrictInt, Field(gt=0)]
-    tipo: Literal["FUNCIONARIO"]
+    tipo: Literal["COLABORADOR"]
     status: Literal["PRE_CADASTRADO"]
     modalidade: Annotated[str, Field(min_length=2, max_length=50)] | None = None
 

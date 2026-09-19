@@ -52,7 +52,7 @@ class PostgresFlowTests(unittest.TestCase):
                 "CREATE TABLE conta (nome VARCHAR(255), email VARCHAR(255) NOT NULL, firebase_uid VARCHAR(128) UNIQUE NOT NULL)",
                 """CREATE TABLE usuarios (id_usuario BIGSERIAL PRIMARY KEY, cpf CHAR(11) UNIQUE,
                    cargo_id BIGINT NOT NULL REFERENCES cargos, unidade_id BIGINT NOT NULL REFERENCES unidades,
-                   tipo TEXT NOT NULL CHECK(tipo IN ('FUNCIONARIO','GESTOR','GESTOR_WORKSPACE')),
+                   tipo TEXT NOT NULL CHECK(tipo IN ('GESTOR','GESTOR_WORKSPACE','COLABORADOR')),
                    status TEXT DEFAULT 'PRE_CADASTRADO' NOT NULL, modalidade TEXT,
                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(email), UNIQUE(firebase_uid)) INHERITS (conta)""",
                 "CREATE TABLE admin (id_admin BIGSERIAL PRIMARY KEY, UNIQUE(email), UNIQUE(firebase_uid)) INHERITS (conta)",

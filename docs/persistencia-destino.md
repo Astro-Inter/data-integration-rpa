@@ -66,7 +66,7 @@ autoriza substituir um UID pertencente a outro usuário.
 | `rpa_user_links` | Registra o vínculo estável após a persistência do usuário, na mesma transação. |
 | Controle de sincronização | Confirma hash e data apenas depois do processador retornar; commit acontece no final da transação externa. |
 
-Criação aplica `FUNCIONARIO`, `PRE_CADASTRADO` e os defaults do banco para data de
+Criação aplica `COLABORADOR`, `PRE_CADASTRADO` e os defaults do banco para data de
 criação e modalidade. Atualização preserva ID, tipo, status, modalidade e criado_em.
 Não há inserção extra em `conta`, reativação automática de cargos/unidades ou
 modificação de administradores. Endereços, NRs e demais tabelas fora do mapeamento
