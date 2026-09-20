@@ -78,6 +78,8 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 | `SYNC_BATCH_SIZE` | Quantidade de usuários por lote; inteiro positivo, padrão `100`. |
 | `SYNC_DRY_RUN` | Solicita simulação quando `true`; padrão existente `false`. |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` ou `CRITICAL`; padrão `INFO`. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Endpoint OTLP base do Grafana Cloud; opcional no desenvolvimento. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Header de autenticação OTLP; segredo no formato fornecido pelo Grafana Cloud. |
 | `EMAIL_ALERTS_ENABLED` | Ativa alertas de falha por e-mail; padrão `true`. |
 | `SMTP_HOST` / `SMTP_PORT` | Servidor SMTP com STARTTLS; padrão `smtp.gmail.com:587`. |
 | `SMTP_USER` | Conta autenticada; padrão `app.4str0@gmail.com`. |
@@ -124,6 +126,49 @@ e [Firebase Admin SDK](https://firebase.google.com/docs/reference/admin/python/f
 
 Base64 é uma codificação, não criptografia. Não versione `.env`, senhas ou contas
 de serviço. No GitHub Actions, as credenciais vêm de GitHub Secrets.
+
+## Observabilidade
+
+O logging padrão do Python continua escrevendo no console e, quando as duas
+variáveis abaixo estão presentes, um segundo handler envia os mesmos registros ao
+Grafana Cloud por OTLP/HTTP com processamento em lote:
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-<regiao>.grafana.net/otlp
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20<credencial>
+```
+
+Copie os valores exibidos em **Grafana Cloud > OpenTelemetry > Configure** sem
+colocá-los no repositório. O endpoint pode ser o endpoint base fornecido pelo
+Grafana; a aplicação acrescenta `/v1/logs`. A autenticação permanece somente em
+memória, não é escrita nos logs e nunca deve ser colocada no README ou no
+workflow.
+
+No repositório do GitHub, crie os secrets do environment `rpa` em
+**Settings > Environments > rpa > Environment secrets**:
+
+- `GRAFANA_OTLP_ENDPOINT`: valor de `OTEL_EXPORTER_OTLP_ENDPOINT`;
+- `GRAFANA_OTLP_HEADERS`: valor completo de `OTEL_EXPORTER_OTLP_HEADERS`.
+
+O workflow repassa esses secrets ao container como as variáveis OTEL. Se ambos
+estiverem ausentes, a execução continua normalmente somente com stdout. Uma
+configuração parcial ou inválida também não impede a sincronização e gera apenas
+um aviso sanitizado no console.
+
+Para testar localmente sem usar as demais integrações reais, configure um receptor
+OTLP/HTTP local ou uma conta de teste do Grafana e execute o container com
+`--env-file .env`. Para validar no Grafana Cloud, execute manualmente o workflow
+`Sincronizar usuarios`, abra **Explore > Logs** (Loki) e consulte:
+
+```logql
+{service_name="data-integration-rpa"}
+```
+
+Os registros incluem timestamp, severidade e mensagem do SDK, além dos atributos
+de recurso `service.name=data-integration-rpa`, `job.name=user-sync`,
+`worker.name=data-integration-rpa`. Campos variáveis como `run_id`, operação,
+status e duração permanecem no corpo ou nos metadados estruturados, não como
+labels principais.
 
 ## Docker
 

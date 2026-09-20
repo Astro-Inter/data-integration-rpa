@@ -28,6 +28,14 @@ hyperframe==6.1.0
 idna==3.19
 msgpack==1.2.2
 opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp-proto-common==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-instrumentation==0.65b0
+opentelemetry-instrumentation-logging==0.65b0
+opentelemetry-proto==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-semantic-conventions==0.65b0
+packaging==26.3
 proto-plus==1.28.4
 protobuf==7.36.1
 psycopg==3.3.5
@@ -46,3 +54,4 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.3
 urllib3==2.7.0
+wrapt==2.4.1

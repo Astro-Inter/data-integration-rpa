@@ -51,6 +51,8 @@ jobs:
           SYNC_BATCH_SIZE: ${{ vars.SYNC_BATCH_SIZE || '100' }}
           SYNC_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
           LOG_LEVEL: INFO
+          OTEL_EXPORTER_OTLP_ENDPOINT: ${{ secrets.GRAFANA_OTLP_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.GRAFANA_OTLP_HEADERS }}
           EMAIL_ALERTS_ENABLED: ${{ vars.EMAIL_ALERTS_ENABLED || 'true' }}
           SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
           SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
@@ -66,6 +68,7 @@ jobs:
             -e LEGACY_DB_HOST -e LEGACY_DB_PORT -e LEGACY_DB_NAME -e LEGACY_DB_USER -e LEGACY_DB_PASSWORD \
             -e TARGET_DB_HOST -e TARGET_DB_PORT -e TARGET_DB_NAME -e TARGET_DB_USER -e TARGET_DB_PASSWORD \
             -e SYNC_BATCH_SIZE -e SYNC_DRY_RUN -e LOG_LEVEL \
+            -e OTEL_EXPORTER_OTLP_ENDPOINT -e OTEL_EXPORTER_OTLP_HEADERS \
             -e EMAIL_ALERTS_ENABLED -e SMTP_HOST -e SMTP_PORT -e SMTP_USER \
             -e SMTP_PASSWORD -e EMAIL_FROM -e EMAIL_TO rpa-sync
       - name: Encerrar container residual
