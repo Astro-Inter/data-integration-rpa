@@ -132,7 +132,8 @@ somente esses schemas ao encerrar. Não usa `.env` nem acessa Firebase real.
 Uma interrupção forçada pode deixar schemas de teste no banco descartável.
 Os testes passam pelo `main`, pelas consultas e pela persistência reais, cobrindo:
 
-- Simulação, criação, repetição sem duplicatas e atualização preservando perfil.
+- Simulação, criação com `COLABORADOR`/`PRE_CADASTRADO`, repetição sem
+  duplicatas e atualização preservando perfil e status existentes.
 - Herança de `conta` e diferenças entre consultar a tabela pai e `ONLY conta`.
 - Falha no segundo lote depois da criação Firebase, rollback total e retomada
   reaproveitando os UIDs sem criar contas duplicadas.

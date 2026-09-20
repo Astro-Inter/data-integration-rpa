@@ -69,7 +69,7 @@ class PreparationTests(unittest.TestCase):
             "email": "ana@example.com", "display_name": "Ana", "email_verified": False,
         })
         payload = prepared.target_insert_payload(firebase_uid="firebase-real-uid", cargo_id=17, unidade_id=23)
-        self.assertEqual(payload["tipo"], "FUNCIONARIO")
+        self.assertEqual(payload["tipo"], "COLABORADOR")
         self.assertEqual(payload["status"], "PRE_CADASTRADO")
         self.assertEqual(payload["cargo_id"], 17)
         self.assertEqual(payload["unidade_id"], 23)

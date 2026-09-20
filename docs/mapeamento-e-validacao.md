@@ -13,7 +13,7 @@ conversa. A consulta da SCRUM-180 já contém os campos necessários; não foi a
 | `funcionario.nome` | `usuarios.nome`, Firebase `display_name` | Preservar grafia e acentos, normalizar espaços. |
 | `funcionario.cpf` | `usuarios.cpf` | CPF obrigatório nesta integração e com dígitos verificadores válidos. |
 | `email.email` | `usuarios.email`, Firebase `email` | Exigir um endereço válido único após normalização. |
-| Sem perfil no legado | `usuarios.tipo` | Criação como `FUNCIONARIO`, sem promoção a gestor. |
+| Sem perfil no legado | `usuarios.tipo` | Criação como `COLABORADOR`, sem promoção a gestor. |
 | Sem situação no legado | `usuarios.status` | Criação como `PRE_CADASTRADO`, conforme default do banco. |
 | Sem modalidade | `usuarios.modalidade` | Omitida; nula na criação. |
 | Sem data equivalente | `usuarios.criado_em` | Omitida; banco aplica `CURRENT_TIMESTAMP` na criação. |
@@ -63,7 +63,7 @@ sem modificar os dados brutos. Métodos para as próximas etapas:
 - `firebase_payload()`: email, display_name e email_verified=false; sem senha ou
   UID fictícios. É payload de criação, não deve redefinir verificação de conta existente.
 - `target_insert_payload(firebase_uid=..., cargo_id=..., unidade_id=...)`: exige
-  referências resolvidas e usa FUNCIONARIO/PRE_CADASTRADO.
+  referências resolvidas e usa COLABORADOR/PRE_CADASTRADO.
 - `target_update_payload(...)`: preserva tipo, status, modalidade e criado_em
   já definidos no aplicativo, enviando apenas identidade e referências do legado.
 

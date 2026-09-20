@@ -27,7 +27,7 @@ DDL = (
     """CREATE TABLE usuarios (id_usuario INTEGER PRIMARY KEY, nome TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE, cpf TEXT UNIQUE, firebase_uid TEXT NOT NULL UNIQUE,
         cargo_id INTEGER NOT NULL REFERENCES cargos, unidade_id INTEGER NOT NULL REFERENCES unidades,
-        tipo TEXT NOT NULL CHECK(tipo IN ('FUNCIONARIO','GESTOR','GESTOR_WORKSPACE')),
+        tipo TEXT NOT NULL CHECK(tipo IN ('GESTOR','GESTOR_WORKSPACE','COLABORADOR')),
         status TEXT NOT NULL DEFAULT 'PRE_CADASTRADO' CHECK(status IN ('PRE_CADASTRADO','ATIVO','DESATIVADO')),
         modalidade TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
     "CREATE TABLE admin (email TEXT UNIQUE, firebase_uid TEXT UNIQUE)",
@@ -63,7 +63,7 @@ class TargetTests(unittest.TestCase):
         for table in ("workspaces", "cargos", "unidades", "usuarios", "rpa_user_links"):
             self.assertEqual(len(self.rows(table)), 1)
         saved = self.rows("usuarios")[0]
-        self.assertEqual((saved["tipo"], saved["status"], saved["firebase_uid"]), ("FUNCIONARIO", "PRE_CADASTRADO", "uid-1"))
+        self.assertEqual((saved["tipo"], saved["status"], saved["firebase_uid"]), ("COLABORADOR", "PRE_CADASTRADO", "uid-1"))
         self.assertIsNotNone(saved["criado_em"])
         self.assertEqual(saved["cargo_id"], self.rows("cargos")[0]["id_cargo"])
         self.assertEqual(saved["unidade_id"], self.rows("unidades")[0]["id_unidade"])
