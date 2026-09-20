@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config.settings import Settings
+from app.observability import configure_observability
 from app.services.integrations import IntegrationError, open_integrations
 from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserRepository
 from app.repositories.sync_state_repository import SyncStateRepository
@@ -51,7 +52,10 @@ def run(execution: ExecutionLog) -> int:
     for name in ("sqlalchemy", "firebase_admin", "google", "urllib3", "httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
     execution.configure(settings)
-    logger.info("Configuração inicial validada.")
+    logger.info(
+        "Configuração inicial validada.",
+        extra={"operation": "validate_configuration", "status": "ok"},
+    )
     logger.info(
         "Lote: %s; modo de teste solicitado: %s.",
         settings.sync_batch_size,
@@ -61,7 +65,10 @@ def run(execution: ExecutionLog) -> int:
         execution.event(Event.CONNECTING)
         with open_integrations(settings) as integrations:
             execution.event(Event.CONNECTED)
-            logger.info("Conexões PostgreSQL e acesso ao Firebase Authentication validados.")
+            logger.info(
+                "Conexões PostgreSQL e acesso ao Firebase Authentication validados.",
+                extra={"operation": "connect_integrations", "status": "ok"},
+            )
             with ExitStack() as connections:
                 report.set_stage("PostgreSQL legado", "Abrir conexão para leitura")
                 connection = connections.enter_context(integrations.legacy.connect())
@@ -150,6 +157,7 @@ def _terminate(signum, frame):
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logger = logging.getLogger(__name__)
+    observability = configure_observability()
     run_id = uuid4().hex
     execution = ExecutionLog(run_id)
     started = monotonic()
@@ -177,15 +185,27 @@ def main() -> int:
         logger.error("Falha inesperada na execução. Verifique serviços e configuração; nenhuma confirmação adicional será realizada.")
     finally:
         try:
-            execution.finish(code, monotonic() - started)
+            try:
+                execution.finish(code, monotonic() - started)
+            finally:
+                execution.close()
+            if previous is not None:
+                signal.signal(signal.SIGTERM, previous)
+            send_failure_alert(execution.report, code, monotonic() - started)
+            logger.log(
+                logging.INFO if code == 0 else logging.ERROR,
+                "Execução encerrada: run_id=%s exit_code=%s duracao_segundos=%.3f.",
+                run_id,
+                code,
+                monotonic() - started,
+                extra={
+                    "operation": "user_sync",
+                    "status": "ok" if code == 0 else "error",
+                    "exit_code": code,
+                },
+            )
         finally:
-            execution.close()
-        if previous is not None:
-            signal.signal(signal.SIGTERM, previous)
-        send_failure_alert(execution.report, code, monotonic() - started)
-        logger.log(logging.INFO if code == 0 else logging.ERROR,
-                   "Execução encerrada: run_id=%s exit_code=%s duracao_segundos=%.3f.",
-                   run_id, code, monotonic() - started)
+            observability.shutdown()
     return code
 
 
