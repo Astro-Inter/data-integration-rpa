@@ -33,3 +33,39 @@ test("does not send when Grafana credentials are not configured", async () => {
   assert.equal(called, false);
 });
 
+
+test("reports Grafana HTTP failures without exposing credentials", async () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...values: unknown[]) => warnings.push(values.join(" "));
+  try {
+    await exportGrafanaLog({
+      GRAFANA_OTLP_ENDPOINT: "https://grafana.example/otlp",
+      GRAFANA_OTLP_HEADERS: "Authorization=Basic%20secret-value",
+    }, "test-worker", "job_finished", "INFO", {}, async () => new Response(null, { status: 401 }));
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /HTTP 401/u);
+  assert.doesNotMatch(warnings[0], /secret-value|Authorization/u);
+});
+
+test("reports network failures without logging error details", async () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...values: unknown[]) => warnings.push(values.join(" "));
+  try {
+    await exportGrafanaLog({
+      GRAFANA_OTLP_ENDPOINT: "https://grafana.example/otlp",
+      GRAFANA_OTLP_HEADERS: "Authorization=Basic%20secret-value",
+    }, "test-worker", "job_finished", "INFO", {}, async () => {
+      throw new Error("Authorization: secret-value");
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /Error/u);
+  assert.doesNotMatch(warnings[0], /secret-value|Authorization/u);
+});

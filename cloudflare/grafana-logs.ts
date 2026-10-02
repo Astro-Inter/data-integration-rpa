@@ -43,7 +43,7 @@ export async function exportGrafanaLog(
           : { intValue: String(value) },
     }));
 
-    await fetcher(endpoint, {
+    const response = await fetcher(endpoint, {
       method: "POST",
       headers: otlpHeaders(env.GRAFANA_OTLP_HEADERS),
       signal: AbortSignal.timeout(5000),
@@ -63,7 +63,12 @@ export async function exportGrafanaLog(
         }],
       }),
     });
-  } catch {
+    if (!response.ok) {
+      console.warn(`[grafana-otlp] export failed for ${service}: HTTP ${response.status}`);
+    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.name : "unknown error";
+    console.warn(`[grafana-otlp] export failed for ${service}: ${reason}`);
     // Telemetry is best-effort; Grafana outages must not affect the job or API.
   }
 }
