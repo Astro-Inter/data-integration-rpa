@@ -1,0 +1,21 @@
+{
+  "name": "data-integration-rpa-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "deploy": "node deploy.mjs",
+    "dev": "wrangler dev",
+    "test": "node --experimental-strip-types --test policy.test.ts domain.test.ts repositories.test.ts firebase-auth.test.ts target-user-repository.test.ts sync-runner.test.ts hyperdrive.test.ts worker.test.ts grafana-logs.test.ts"
+  },
+  "dependencies": {
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261001.1",
+    "@types/node": "22.20.3",
+    "@types/pg": "8.15.5",
+    "typescript": "5.9.3",
+    "wrangler": "4.145.0"
+  }
+}
