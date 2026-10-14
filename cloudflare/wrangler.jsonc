@@ -1,0 +1,34 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "data-integration-rpa",
+	"account_id": "25eb8d3849be3adbff3678f4ec781804",
+	"main": "worker.ts",
+	"compatibility_date": "2026-10-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"workers_dev": true,
+	"observability": {
+		"enabled": false
+	},
+	"hyperdrive": [
+		{
+			"binding": "LEGACY_DB",
+			"id": "b489be2bcec844cca24a9afca3c174f6"
+		},
+		{
+			"binding": "TARGET_DB",
+			"id": "2004ed1dbe4a460495e663c42f3b801f"
+		}
+	],
+  "triggers": {
+    "crons": ["17 * * * *"]
+  },
+  "vars": {
+    "API_ENABLED": "true",
+    "JOBS_ENABLED": "true",
+    "GRAFANA_OTLP_ENDPOINT": "https://otlp-gateway-prod-sa-east-1.grafana.net/otlp",
+		"SYNC_BATCH_SIZE": "100",
+		"SYNC_DRY_RUN": "true"
+	}
+}
