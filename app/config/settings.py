@@ -40,6 +40,7 @@ class Settings(FirebaseSettings, EmailSettings):
     legacy_db_name: str = Field(min_length=1)
     legacy_db_user: str = Field(min_length=1)
     legacy_db_password: SecretStr = Field(min_length=1)
+    legacy_cpf_key: SecretStr = SecretStr("")
 
     target_db_host: str = Field(min_length=1)
     target_db_port: int = Field(default=5432, ge=1, le=65535)

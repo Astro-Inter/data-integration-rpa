@@ -13,6 +13,7 @@ from sqlalchemy.exc import DBAPIError
 from app.database.sync_schema import metadata
 from app.main import main
 from app.repositories.sync_state_repository import SyncStateRepository
+from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserRepository
 import test_settings
 
 
@@ -27,7 +28,7 @@ class PostgresFlowTests(unittest.TestCase):
             for schema in self.schemas:
                 db.execute(text(f'CREATE SCHEMA "{schema}"'))
         self.addCleanup(self.drop_schemas)
-        self.legacy = create_engine(url, connect_args={"options": f"-c search_path={self.schemas[0]} -c default_transaction_read_only=on"})
+        self.legacy = create_engine(url, hide_parameters=True, connect_args={"options": f"-c search_path={self.schemas[0]},public -c default_transaction_read_only=on"})
         self.target = create_engine(url, connect_args={"options": f"-c search_path={self.schemas[1]}"})
         self.addCleanup(self.legacy.dispose)
         self.addCleanup(self.target.dispose)
@@ -81,9 +82,10 @@ class PostgresFlowTests(unittest.TestCase):
         self.accounts[email] = result
         return result
 
-    def execute_rpa(self, dry_run=False):
+    def execute_rpa(self, dry_run=False, cpf_key=""):
         settings = test_settings.SettingsTests().load(
             SYNC_DRY_RUN=str(dry_run).lower(), SYNC_BATCH_SIZE="1",
+            LEGACY_CPF_KEY=cpf_key,
         )
         with patch("app.main.Settings", return_value=settings), \
              patch("app.services.integrations.initialize_firebase", return_value=object()), \
@@ -153,3 +155,52 @@ class PostgresFlowTests(unittest.TestCase):
     def test_legacy_connection_is_read_only(self):
         with self.assertRaises(DBAPIError), self.legacy.begin() as db:
             db.execute(text("UPDATE funcionario SET nome='não permitido'"))
+
+    def encrypt_legacy(self, *, inline_email=True):
+        with self.admin.begin() as db:
+            db.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public"))
+            db.execute(text(f'SET LOCAL search_path TO "{self.schemas[0]}", public'))
+            db.execute(text("UPDATE funcionario SET cpf='01234567890'"))
+            db.execute(text("ALTER TABLE funcionario ALTER COLUMN cpf TYPE BYTEA USING pgp_sym_encrypt(cpf, 'chave-pgp-teste')"))
+            if inline_email:
+                db.execute(text("ALTER TABLE funcionario ADD COLUMN email VARCHAR(100)"))
+                db.execute(text("UPDATE funcionario SET email = 'ana@example.com'"))
+                db.execute(text("DROP TABLE email"))
+
+    def test_encrypted_inline_flow_and_reencryption_preserve_identity(self):
+        self.encrypt_legacy()
+        self.assertEqual(self.execute_rpa(dry_run=True, cpf_key="chave-pgp-teste"), 0)
+        self.assertEqual(self.count("usuario"), 0)
+        self.assertEqual(self.execute_rpa(cpf_key="chave-pgp-teste"), 0)
+        with self.target.connect() as db:
+            self.assertEqual(db.execute(text("SELECT cpf FROM usuario")).scalar_one(), "01234567890")
+            confirmed = db.execute(text("SELECT synced_at FROM rpa_sync_users")).scalar_one()
+        with self.admin.begin() as db:
+            db.execute(text(f'SET LOCAL search_path TO "{self.schemas[0]}", public'))
+            db.execute(text("UPDATE funcionario SET cpf=pgp_sym_encrypt('01234567890', :key)"), {"key": "chave-pgp-teste"})
+        self.assertEqual(self.execute_rpa(cpf_key="chave-pgp-teste"), 0)
+        self.assertEqual(self.creates, 1)
+        with self.target.connect() as db:
+            self.assertEqual(db.execute(text("SELECT synced_at FROM rpa_sync_users")).scalar_one(), confirmed)
+
+    def test_encrypted_cpf_with_previous_email_table(self):
+        self.encrypt_legacy(inline_email=False)
+        with self.legacy.connect() as db:
+            users = list(LegacyUserRepository(db, cpf_key="chave-pgp-teste").iter_batches(1))[0]
+        self.assertEqual(users[0].cpf, "01234567890")
+        self.assertEqual(users[0].emails[0].email, "ana@example.com")
+
+    def test_invalid_decryption_never_confirms_or_exposes_secrets(self):
+        self.encrypt_legacy()
+        for key in ("", "chave-incorreta"):
+            with self.subTest(key=bool(key)), self.legacy.connect() as db:
+                with self.assertRaises(LegacyReadError) as caught:
+                    list(LegacyUserRepository(db, cpf_key=key).iter_batches(1))
+                message = str(caught.exception)
+                self.assertNotIn("chave-incorreta", message)
+                self.assertNotIn("01234567890", message)
+                self.assertNotIn("SELECT", message)
+            self.assertEqual(self.execute_rpa(cpf_key=key), 1)
+            self.assertEqual(self.count("usuario"), 0)
+            self.assertEqual(self.count("rpa_sync_users"), 0)
+        self.assertEqual(self.creates, 0)

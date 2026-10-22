@@ -18,6 +18,25 @@ O desenho usa Worker nativo e dois bindings Hyperdrive, sem Containers ou overri
 
 As execuções do Cloudflare permanecem em dry-run. Desative o cron do GitHub Actions e habilite gravações somente após comparar uma simulação bem-sucedida com a execução Python e validar as conexões reais. O Workers Free limita CPU de Cron a 10 ms; monitore erros de limite e a cota diária do Hyperdrive antes de qualquer execução de escrita.
 
+## Leitura do legado criptografado
+
+Configure o Secret `LEGACY_CPF_KEY` no Worker com a mesma chave usada no
+`pgp_sym_encrypt` do banco legado, antes de publicar esta versão. No Python,
+use a variável de ambiente de mesmo nome ou o `.env` local. Não versione o valor.
+
+Os dois adaptadores detectam o tipo de `funcionario.cpf`: `BYTEA` usa
+`pgp_sym_decrypt` com chave vinculada como parâmetro; texto mantém a leitura
+anterior sem exigir chave. O banco precisa disponibilizar `pgcrypto` no
+`search_path` da conexão. Chave ausente/incorreta ou conteúdo corrompido
+interrompem a execução sem confirmar o lote ou expor parâmetros nos erros.
+
+Quando existe `funcionario.email`, esse campo alimenta a coleção de e-mails.
+Sem essa coluna, continua a consulta à tabela `email`. A tabela `administrador`
+e seus hashes bcrypt não participam da sincronização.
+
+`npm test` inclui um teste PostgreSQL opt-in via `TEST_POSTGRES_URL` em banco
+descartável; o CI executa esse teste e os testes Python de criptografia.
+
 ## Exportação Grafana
 
 O Worker envia eventos resumidos de sucesso ou falha em OTLP/HTTP para

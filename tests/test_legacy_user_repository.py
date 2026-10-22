@@ -53,6 +53,27 @@ class LegacyUserRepositoryTests(unittest.TestCase):
         self.read_only()
         self.assertEqual(list(self.repository.iter_batches(2)), [])
 
+    def test_inline_email_without_email_table(self):
+        self.seed()
+        self.connection.execute(text("ALTER TABLE funcionario ADD COLUMN email TEXT"))
+        self.connection.execute(text("UPDATE funcionario SET email = 'ana@example.test' WHERE id_funcionario = -2"))
+        self.connection.execute(text("DROP TABLE email"))
+        self.read_only()
+        users = [user for batch in self.repository.iter_batches(1) for user in batch]
+        self.assertEqual(len(users), 4)
+        self.assertEqual(users[0].emails[0].email, 'ana@example.test')
+        self.assertIsNone(users[1].emails[0].email)
+        self.assertEqual(users[0].cpf, '00000000001')
+
+    def test_encrypted_cpf_requires_key_before_reading_rows(self):
+        self.seed()
+        # SQLite não implementa PGP; este caso valida a detecção de coluna binária.
+        with patch('app.repositories.legacy_user_repository.inspect') as inspector:
+            from sqlalchemy import LargeBinary
+            inspector.return_value.get_columns.return_value = [{"name": "cpf", "type": LargeBinary()}]
+            with self.assertRaisesRegex(LegacyReadError, 'LEGACY_CPF_KEY'):
+                list(self.repository.iter_batches(1))
+
     def test_pages_preserve_all_users_and_raw_emails_without_duplicates(self):
         self.seed()
         self.read_only()

@@ -6,6 +6,7 @@ import { queueGrafanaLog, type GrafanaEnv } from "./grafana-logs.ts";
 
 interface Env extends GrafanaEnv {
   LEGACY_DB: HyperdriveBinding;
+  LEGACY_CPF_KEY?: string;
   TARGET_DB: HyperdriveBinding;
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CREDENTIALS_BASE64: string;
@@ -34,7 +35,7 @@ async function execute(env: Env, dryRun: boolean): Promise<SyncSummary> {
   const credential = parseServiceAccount(env.FIREBASE_CREDENTIALS_BASE64, env.FIREBASE_PROJECT_ID);
   const firebase = new FirebaseAuthClient(env.FIREBASE_PROJECT_ID, credential, dryRun);
   return withHyperdriveSessions(env.LEGACY_DB, env.TARGET_DB, dryRun, (legacy, destination) =>
-    runUserSync({ legacy, destination, firebase, batchSize: batchSize(env), dryRun }),
+    runUserSync({ legacy, destination, firebase, batchSize: batchSize(env), dryRun, legacyCpfKey: env.LEGACY_CPF_KEY }),
   );
 }
 

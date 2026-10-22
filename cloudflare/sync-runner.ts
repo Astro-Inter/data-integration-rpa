@@ -21,6 +21,7 @@ export type SyncOptions = {
   firebase: FirebaseAuthClient;
   batchSize: number;
   dryRun: boolean;
+  legacyCpfKey?: string;
 };
 
 export async function runUserSync(options: SyncOptions): Promise<SyncSummary> {
@@ -37,7 +38,7 @@ export async function runUserSync(options: SyncOptions): Promise<SyncSummary> {
     total: 0, new: 0, changed: 0, unchanged: 0, confirmed: 0, validated: 0,
     invalid: 0, validation_errors: {}, last_synced_at: await state.lastSyncedAt(),
   };
-  for await (const batch of iterateLegacyBatches(options.legacy, options.batchSize)) {
+  for await (const batch of iterateLegacyBatches(options.legacy, options.batchSize, options.legacyCpfKey)) {
     const hashes = await state.confirmedHashes(batch.map((user) => user.id_funcionario));
     for (const user of batch) {
       summary.total++;

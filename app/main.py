@@ -76,7 +76,9 @@ def run(execution: ExecutionLog) -> int:
                 target = connections.enter_context(integrations.target.begin())
                 report.set_stage("PostgreSQL destino", "Consultar ou confirmar controle de sincronização")
                 execution.event(Event.PROCESSING)
-                repository = LegacyUserRepository(connection)
+                repository = LegacyUserRepository(
+                    connection, cpf_key=settings.legacy_cpf_key.get_secret_value(),
+                )
                 processor = UserSyncProcessor(
                     FirebaseUserService(integrations.firebase, dry_run=settings.sync_dry_run),
                     resolve_identity=lambda user, db: TargetUserRepository(db).resolve_identity(user),
@@ -110,7 +112,7 @@ def run(execution: ExecutionLog) -> int:
         if isinstance(exc, IntegrationError):
             report.add("Verifique configuração, credenciais, rede e permissões de acesso.", system=exc.system, stage=exc.stage)
         elif isinstance(exc, LegacyReadError):
-            report.add("Falha na consulta de funcionario, empresa, departamento ou email. Confira tabelas e permissão SELECT.", system="PostgreSQL legado", stage="Consulta dos usuários")
+            report.add(str(exc), system="PostgreSQL legado", stage="Consulta dos usuários")
         elif isinstance(exc, UserDataError):
             if not report.issues:
                 report.validation(exc)
