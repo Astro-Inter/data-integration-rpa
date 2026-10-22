@@ -21,12 +21,12 @@ import test_settings
 
 
 DDL = (
-    "CREATE TABLE workspaces (id_workspace INTEGER PRIMARY KEY, nome TEXT NOT NULL CHECK(length(trim(nome))>=2), cnpj TEXT NOT NULL UNIQUE)",
-    "CREATE TABLE cargos (id_cargo INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL REFERENCES workspaces, nome TEXT NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
-    "CREATE TABLE unidades (id_unidade INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL REFERENCES workspaces, nome TEXT NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
-    """CREATE TABLE usuarios (id_usuario INTEGER PRIMARY KEY, nome TEXT NOT NULL,
+    "CREATE TABLE workspace (id_workspace INTEGER PRIMARY KEY, nome TEXT NOT NULL CHECK(length(trim(nome))>=2), cnpj TEXT NOT NULL UNIQUE)",
+    "CREATE TABLE cargo (id_cargo INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL REFERENCES workspace, nome TEXT NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
+    "CREATE TABLE unidade (id_unidade INTEGER PRIMARY KEY, workspace_id INTEGER NOT NULL REFERENCES workspace, nome TEXT NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
+    """CREATE TABLE usuario (id_usuario INTEGER PRIMARY KEY, nome TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE, cpf TEXT UNIQUE, firebase_uid TEXT NOT NULL UNIQUE,
-        cargo_id INTEGER NOT NULL REFERENCES cargos, unidade_id INTEGER NOT NULL REFERENCES unidades,
+        cargo_id INTEGER NOT NULL REFERENCES cargo, unidade_id INTEGER NOT NULL REFERENCES unidade,
         tipo TEXT NOT NULL CHECK(tipo IN ('GESTOR','GESTOR_WORKSPACE','COLABORADOR')),
         status TEXT NOT NULL DEFAULT 'PRE_CADASTRADO' CHECK(status IN ('PRE_CADASTRADO','ATIVO','DESATIVADO')),
         modalidade TEXT, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
@@ -60,36 +60,36 @@ class TargetTests(unittest.TestCase):
     def test_create_all_relations_and_repeat_without_duplicates(self):
         self.persist()
         self.persist()
-        for table in ("workspaces", "cargos", "unidades", "usuarios", "rpa_user_links"):
+        for table in ("workspace", "cargo", "unidade", "usuario", "rpa_user_links"):
             self.assertEqual(len(self.rows(table)), 1)
-        saved = self.rows("usuarios")[0]
+        saved = self.rows("usuario")[0]
         self.assertEqual((saved["tipo"], saved["status"], saved["firebase_uid"]), ("COLABORADOR", "PRE_CADASTRADO", "uid-1"))
         self.assertIsNotNone(saved["criado_em"])
-        self.assertEqual(saved["cargo_id"], self.rows("cargos")[0]["id_cargo"])
-        self.assertEqual(saved["unidade_id"], self.rows("unidades")[0]["id_unidade"])
+        self.assertEqual(saved["cargo_id"], self.rows("cargo")[0]["id_cargo"])
+        self.assertEqual(saved["unidade_id"], self.rows("unidade")[0]["id_unidade"])
         self.assertEqual(self.rows("conta"), [])
 
     def test_update_preserves_profile_status_dates_and_disabled_entities(self):
         self.persist()
         with self.engine.begin() as db:
-            db.execute(text("UPDATE usuarios SET tipo='GESTOR', status='DESATIVADO', modalidade='Híbrida', criado_em='2020-01-01'"))
-            db.execute(text("UPDATE cargos SET ativo=FALSE"))
-            db.execute(text("UPDATE unidades SET ativo=FALSE"))
+            db.execute(text("UPDATE usuario SET tipo='GESTOR', status='DESATIVADO', modalidade='Híbrida', criado_em='2020-01-01'"))
+            db.execute(text("UPDATE cargo SET ativo=FALSE"))
+            db.execute(text("UPDATE unidade SET ativo=FALSE"))
         self.persist(replace(self.raw, nome="Ana Silva", empresa_nome="Empresa atualizada"))
-        saved = self.rows("usuarios")[0]
+        saved = self.rows("usuario")[0]
         self.assertEqual((saved["nome"], saved["tipo"], saved["status"], saved["modalidade"], saved["criado_em"]),
                          ("Ana Silva", "GESTOR", "DESATIVADO", "Híbrida", "2020-01-01"))
-        self.assertFalse(self.rows("cargos")[0]["ativo"])
-        self.assertFalse(self.rows("unidades")[0]["ativo"])
-        self.assertEqual(self.rows("workspaces")[0]["nome"], "Empresa atualizada")
+        self.assertFalse(self.rows("cargo")[0]["ativo"])
+        self.assertFalse(self.rows("unidade")[0]["ativo"])
+        self.assertEqual(self.rows("workspace")[0]["nome"], "Empresa atualizada")
 
     def test_changed_job_and_department_relink_without_renaming_shared_records(self):
         self.persist()
         self.persist(replace(self.raw, cargo="Coordenadora", departamento_nome="Financeiro"))
-        self.assertEqual(len(self.rows("cargos")), 2)
-        self.assertEqual(len(self.rows("unidades")), 2)
-        self.assertEqual(len(self.rows("usuarios")), 1)
-        self.assertEqual(self.rows("usuarios")[0]["cargo_id"], 2)
+        self.assertEqual(len(self.rows("cargo")), 2)
+        self.assertEqual(len(self.rows("unidade")), 2)
+        self.assertEqual(len(self.rows("usuario")), 1)
+        self.assertEqual(self.rows("usuario")[0]["cargo_id"], 2)
 
     def test_existing_user_can_be_adopted_only_with_matching_identity(self):
         self.persist()
@@ -97,7 +97,7 @@ class TargetTests(unittest.TestCase):
             db.execute(user_links.delete())
             self.assertEqual(TargetUserRepository(db).resolve_identity(prepare_user(self.raw)), "uid-1")
             TargetUserRepository(db).persist(prepare_user(self.raw), "uid-1")
-        self.assertEqual(len(self.rows("usuarios")), 1)
+        self.assertEqual(len(self.rows("usuario")), 1)
         self.assertEqual(len(self.rows("rpa_user_links")), 1)
 
     def test_different_person_or_uid_or_source_cannot_take_over(self):
@@ -106,13 +106,13 @@ class TargetTests(unittest.TestCase):
                          (self.raw, "outro-uid"), (replace(self.raw, id_funcionario=2), "uid-1")):
             with self.subTest(uid=uid, id=raw.id_funcionario), self.assertRaises(TargetIdentityError):
                 self.persist(raw, uid)
-        self.assertEqual(len(self.rows("usuarios")), 1)
+        self.assertEqual(len(self.rows("usuario")), 1)
 
     def test_cross_workspace_move_is_blocked(self):
         self.persist()
         with self.assertRaises(TargetIdentityError):
             self.persist(replace(self.raw, empresa_cnpj="04252011000110"))
-        self.assertEqual(len(self.rows("workspaces")), 1)
+        self.assertEqual(len(self.rows("workspace")), 1)
 
     def test_admin_and_parent_conflicts_are_blocked(self):
         for table in ("admin", "conta"):
@@ -123,7 +123,7 @@ class TargetTests(unittest.TestCase):
                     self.persist()
                 with self.engine.begin() as db:
                     db.execute(text(f"DELETE FROM {table}"))
-        self.assertEqual(self.rows("usuarios"), [])
+        self.assertEqual(self.rows("usuario"), [])
 
     def test_uid_conflict_in_admin_detected_after_firebase_lookup(self):
         with self.engine.begin() as db:
@@ -132,12 +132,12 @@ class TargetTests(unittest.TestCase):
             self.assertIsNone(repo.resolve_identity(prepare_user(self.raw)))
         with self.assertRaises(TargetIdentityError):
             self.persist()
-        self.assertEqual(self.rows("workspaces"), [])
+        self.assertEqual(self.rows("workspace"), [])
 
     def test_stale_mapping_fails_instead_of_recreating(self):
         self.persist()
         with self.engine.begin() as db:
-            db.execute(text("DELETE FROM usuarios"))
+            db.execute(text("DELETE FROM usuario"))
         with self.assertRaises(TargetIdentityError):
             self.persist()
 
@@ -147,10 +147,10 @@ class TargetTests(unittest.TestCase):
                         empresa_cnpj="04252011000110", empresa_nome="Empresa B",
                         emails=(LegacyEmail(1, "bruno@example.com"),))
         self.persist(other, "uid-2")
-        self.assertEqual(len(self.rows("workspaces")), 2)
-        self.assertEqual(len(self.rows("cargos")), 2)
-        self.assertEqual(len(self.rows("unidades")), 2)
-        self.assertNotEqual(self.rows("cargos")[0]["workspace_id"], self.rows("cargos")[1]["workspace_id"])
+        self.assertEqual(len(self.rows("workspace")), 2)
+        self.assertEqual(len(self.rows("cargo")), 2)
+        self.assertEqual(len(self.rows("unidade")), 2)
+        self.assertNotEqual(self.rows("cargo")[0]["workspace_id"], self.rows("cargo")[1]["workspace_id"])
 
     def test_cpf_and_email_pointing_at_two_accounts_fail(self):
         self.persist()
@@ -159,16 +159,16 @@ class TargetTests(unittest.TestCase):
         self.persist(other, "uid-2")
         with self.assertRaises(TargetIdentityError):
             self.persist(replace(self.raw, emails=other.emails))
-        self.assertEqual(len(self.rows("usuarios")), 2)
+        self.assertEqual(len(self.rows("usuario")), 2)
 
     def test_constraint_failure_after_relations_rolls_them_back(self):
         with self.engine.begin() as db:
-            db.execute(text("""CREATE TRIGGER reject_user BEFORE INSERT ON usuarios
+            db.execute(text("""CREATE TRIGGER reject_user BEFORE INSERT ON usuario
                 BEGIN SELECT RAISE(ABORT, 'rejeitado'); END"""))
         from sqlalchemy.exc import IntegrityError
         with self.assertRaises(IntegrityError):
             self.persist()
-        for table in ("workspaces", "cargos", "unidades", "usuarios", "rpa_user_links"):
+        for table in ("workspace", "cargo", "unidade", "usuario", "rpa_user_links"):
             self.assertEqual(self.rows(table), [])
 
     def test_existing_control_upgrade_adds_links_without_resetting_history(self):
@@ -205,7 +205,7 @@ class TargetTests(unittest.TestCase):
             raise RuntimeError("falha depois de gravar relações")
         with self.assertRaises(RuntimeError), self.engine.begin() as db:
             ChangeTrackingService(source, SyncStateRepository(db)).run(100, process_user=process)
-        for table in ("workspaces", "cargos", "unidades", "usuarios", "rpa_user_links", "rpa_sync_users", "rpa_sync_control"):
+        for table in ("workspace", "cargo", "unidade", "usuario", "rpa_user_links", "rpa_sync_users", "rpa_sync_control"):
             self.assertEqual(self.rows(table), [])
 
     def test_main_activates_real_processor_only_when_not_dry_run(self):
@@ -220,4 +220,4 @@ class TargetTests(unittest.TestCase):
                     with self.assertLogs(level="INFO"):
                         self.assertEqual(main(), 0)
                     self.assertEqual(find.call_count, 0 if dry_run == "true" else 1)
-                self.assertEqual(len(self.rows("usuarios")), 0 if dry_run == "true" else 1)
+                self.assertEqual(len(self.rows("usuario")), 0 if dry_run == "true" else 1)

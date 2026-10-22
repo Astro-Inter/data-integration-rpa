@@ -59,10 +59,10 @@ autoriza substituir um UID pertencente a outro usuário.
 
 | Tabela | Comportamento |
 | --- | --- |
-| `workspaces` | UPSERT por CNPJ. Reutiliza o ID e atualiza o nome com o valor do legado. |
-| `cargos` | Insere por `(workspace_id, nome)` se ausente e recupera o ID. Preserva `ativo` quando já existe. |
-| `unidades` | Mesmo tratamento por `(workspace_id, nome)`, usando o workspace resolvido. |
-| `usuarios` | Insere com UID Firebase e IDs reais de cargo/unidade; ou atualiza nome, e-mail, CPF e referências da identidade validada. |
+| `workspace` | UPSERT por CNPJ. Reutiliza o ID e atualiza o nome com o valor do legado. |
+| `cargo` | Insere por `(workspace_id, nome)` se ausente e recupera o ID. Preserva `ativo` quando já existe. |
+| `unidade` | Mesmo tratamento por `(workspace_id, nome)`, usando o workspace resolvido. |
+| `usuario` | Insere com UID Firebase e IDs reais de cargo/unidade; ou atualiza nome, e-mail, CPF e referências da identidade validada. |
 | `rpa_user_links` | Registra o vínculo estável após a persistência do usuário, na mesma transação. |
 | Controle de sincronização | Confirma hash e data apenas depois do processador retornar; commit acontece no final da transação externa. |
 

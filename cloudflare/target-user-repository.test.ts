@@ -19,8 +19,8 @@ class TargetDatabase implements SqlClient {
     let rows: Record<string, unknown>[] = [];
     if (sql.includes("FROM admin")) rows = this.conflictAdmin ? [{ one: 1 }] : [];
     else if (sql.includes("RETURNING id_workspace")) rows = [{ id_workspace: 9 }];
-    else if (sql.includes("AS id FROM cargos")) rows = [{ id: 17 }];
-    else if (sql.includes("AS id FROM unidades")) rows = [{ id: 23 }];
+    else if (sql.includes("AS id FROM cargo")) rows = [{ id: 17 }];
+    else if (sql.includes("AS id FROM unidade")) rows = [{ id: 23 }];
     else if (sql.includes("RETURNING id_usuario")) rows = [{ id_usuario: 101 }];
     return { rows: rows as Row[] };
   }
@@ -32,10 +32,10 @@ test("persists a new user, relations, and legacy link with parameterized stateme
   const prepared = prepareUser(source);
   assert.equal(await repo.resolveIdentity(prepared), null);
   await repo.persist(prepared, "firebase-uid");
-  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO workspaces")));
-  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO cargos")));
-  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO unidades")));
-  const insertedUser = db.calls.find((call) => call.sql.includes("INSERT INTO usuarios"));
+  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO workspace")));
+  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO cargo")));
+  assert.ok(db.calls.some((call) => call.sql.includes("INSERT INTO unidade")));
+  const insertedUser = db.calls.find((call) => call.sql.includes("INSERT INTO usuario"));
   assert.deepEqual(insertedUser?.parameters, [
     "Ana", "ana@example.com", "52998224725", "firebase-uid", 17, 23, "COLABORADOR", "PRE_CADASTRADO",
   ]);
@@ -49,5 +49,5 @@ test("blocks administrator identity conflicts before touching destination user t
   db.conflictAdmin = true;
   const repo = new TargetUserRepository(db);
   await assert.rejects(repo.resolveIdentity(prepareUser(source)), TargetIdentityError);
-  assert.ok(!db.calls.some((call) => call.sql.includes("FROM usuarios")));
+  assert.ok(!db.calls.some((call) => call.sql.includes("FROM usuario")));
 });

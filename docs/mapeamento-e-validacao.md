@@ -7,20 +7,20 @@ conversa. A consulta da SCRUM-180 já contém os campos necessários; não foi a
 
 | Origem | Destino preparado | Regra |
 | --- | --- | --- |
-| `empresa.nome`, `empresa.cnpj` | `workspaces.nome`, `workspaces.cnpj` | Empresa representa workspace; localização futura por CNPJ normalizado. |
-| `departamento.nome` | `unidades.nome` | Departamento representa unidade organizacional no workspace da empresa. |
-| `funcionario.cargo` | `cargos.nome` | Cargo pertence ao mesmo workspace da unidade. |
-| `funcionario.nome` | `usuarios.nome`, Firebase `display_name` | Preservar grafia e acentos, normalizar espaços. |
-| `funcionario.cpf` | `usuarios.cpf` | CPF obrigatório nesta integração e com dígitos verificadores válidos. |
-| `email.email` | `usuarios.email`, Firebase `email` | Exigir um endereço válido único após normalização. |
-| Sem perfil no legado | `usuarios.tipo` | Criação como `COLABORADOR`, sem promoção a gestor. |
-| Sem situação no legado | `usuarios.status` | Criação como `PRE_CADASTRADO`, conforme default do banco. |
-| Sem modalidade | `usuarios.modalidade` | Omitida; nula na criação. |
-| Sem data equivalente | `usuarios.criado_em` | Omitida; banco aplica `CURRENT_TIMESTAMP` na criação. |
-| Retorno futuro do Firebase | `usuarios.firebase_uid` | UID real, nunca gerado por esta preparação. |
+| `empresa.nome`, `empresa.cnpj` | `workspace.nome`, `workspace.cnpj` | Empresa representa workspace; localização futura por CNPJ normalizado. |
+| `departamento.nome` | `unidade.nome` | Departamento representa unidade organizacional no workspace da empresa. |
+| `funcionario.cargo` | `cargo.nome` | Cargo pertence ao mesmo workspace da unidade. |
+| `funcionario.nome` | `usuario.nome`, Firebase `display_name` | Preservar grafia e acentos, normalizar espaços. |
+| `funcionario.cpf` | `usuario.cpf` | CPF obrigatório nesta integração e com dígitos verificadores válidos. |
+| `email.email` | `usuario.email`, Firebase `email` | Exigir um endereço válido único após normalização. |
+| Sem perfil no legado | `usuario.tipo` | Criação como `COLABORADOR`, sem promoção a gestor. |
+| Sem situação no legado | `usuario.status` | Criação como `PRE_CADASTRADO`, conforme default do banco. |
+| Sem modalidade | `usuario.modalidade` | Omitida; nula na criação. |
+| Sem data equivalente | `usuario.criado_em` | Omitida; banco aplica `CURRENT_TIMESTAMP` na criação. |
+| Retorno futuro do Firebase | `usuario.firebase_uid` | UID real, nunca gerado por esta preparação. |
 
-`usuarios` herda nome, e-mail e UID de `conta`: esses campos entram na inserção de
-`usuarios`, sem uma segunda inserção independente em `conta`. Não há workspace_id
+`usuario` herda nome, e-mail e UID de `conta`: esses campos entram na inserção de
+`usuario`, sem uma segunda inserção independente em `conta`. Não há workspace_id
 direto em usuarios: o vínculo usa cargo_id e unidade_id resolvidos no destino.
 
 Unidade e cargo serão localizados por `(workspace_id, nome)`, conforme as constraints.

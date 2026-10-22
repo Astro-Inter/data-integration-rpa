@@ -24,8 +24,8 @@ class TargetUserRepository:
             user_links.c.legacy_id == user.legacy_id,
         )).mappings().one_or_none()
         params["linked_id"] = link["target_id"] if link else None
-        # Herança PostgreSQL não estende UNIQUE entre conta, usuarios e admin.
-        # ONLY evita que a consulta de conta inclua os próprios usuarios.
+        # Herança PostgreSQL não estende UNIQUE entre conta, usuario e admin.
+        # ONLY evita que a consulta de conta inclua os próprios usuario.
         parent = "ONLY conta" if self.connection.dialect.name == "postgresql" else "conta"
         for table in ("admin", parent):
             if self.connection.execute(text(
@@ -34,7 +34,7 @@ class TargetUserRepository:
                 raise TargetIdentityError("Identidade já utilizada por administrador ou conta independente.")
         query = """
             SELECT id_usuario, cpf, email, firebase_uid, cargo_id, unidade_id
-            FROM usuarios WHERE cpf = :cpf OR lower(trim(email)) = :email
+            FROM usuario WHERE cpf = :cpf OR lower(trim(email)) = :email
                 OR firebase_uid = :uid OR id_usuario = :linked_id
         """
         if self.connection.dialect.name == "postgresql":
@@ -58,14 +58,14 @@ class TargetUserRepository:
             )).first()
             if other:
                 raise TargetIdentityError("Usuário destino já vinculado a outro registro de origem.")
-            workspaces = self.connection.execute(text("""
+            workspace = self.connection.execute(text("""
                 SELECT wc.cnpj AS cargo_cnpj, wu.cnpj AS unidade_cnpj
-                FROM cargos c JOIN workspaces wc ON wc.id_workspace = c.workspace_id
-                JOIN unidades u ON u.id_unidade = :unit_id
-                JOIN workspaces wu ON wu.id_workspace = u.workspace_id
+                FROM cargo c JOIN workspace wc ON wc.id_workspace = c.workspace_id
+                JOIN unidade u ON u.id_unidade = :unit_id
+                JOIN workspace wu ON wu.id_workspace = u.workspace_id
                 WHERE c.id_cargo = :job_id
             """), {"unit_id": row["unidade_id"], "job_id": row["cargo_id"]}).mappings().one_or_none()
-            if workspaces is None or any(value != user.workspace.cnpj for value in workspaces.values()):
+            if workspace is None or any(value != user.workspace.cnpj for value in workspace.values()):
                 raise TargetIdentityError("Mudança de workspace ou vínculo organizacional inconsistente exige revisão.")
         return row
 
@@ -77,16 +77,16 @@ class TargetUserRepository:
         row = self._identity(user, uid)
         # Vincular pelo CNPJ, preservando id_workspace e atualizando nome da origem.
         workspace_id = self.connection.execute(text("""
-            INSERT INTO workspaces (nome, cnpj) VALUES (:nome, :cnpj)
+            INSERT INTO workspace (nome, cnpj) VALUES (:nome, :cnpj)
             ON CONFLICT (cnpj) DO UPDATE SET nome = EXCLUDED.nome
             RETURNING id_workspace
         """), user.workspace_payload()).scalar_one()
-        job_id = self._organization("cargos", "id_cargo", user.job_insert_payload(workspace_id=workspace_id))
-        unit_id = self._organization("unidades", "id_unidade", user.unit_insert_payload(workspace_id=workspace_id))
+        job_id = self._organization("cargo", "id_cargo", user.job_insert_payload(workspace_id=workspace_id))
+        unit_id = self._organization("unidade", "id_unidade", user.unit_insert_payload(workspace_id=workspace_id))
         payload = user.target_insert_payload(firebase_uid=uid, cargo_id=job_id, unidade_id=unit_id)
         if row is None:
             target_id = self.connection.execute(text("""
-                INSERT INTO usuarios (nome, email, cpf, firebase_uid, cargo_id, unidade_id, tipo, status)
+                INSERT INTO usuario (nome, email, cpf, firebase_uid, cargo_id, unidade_id, tipo, status)
                 VALUES (:nome, :email, :cpf, :firebase_uid, :cargo_id, :unidade_id, :tipo, :status)
                 RETURNING id_usuario
             """), payload).scalar_one()
@@ -94,7 +94,7 @@ class TargetUserRepository:
             target_id = row["id_usuario"]
             updates = user.target_update_payload(firebase_uid=uid, cargo_id=job_id, unidade_id=unit_id)
             self.connection.execute(text("""
-                UPDATE usuarios SET nome=:nome, email=:email, cpf=:cpf,
+                UPDATE usuario SET nome=:nome, email=:email, cpf=:cpf,
                     firebase_uid=:firebase_uid, cargo_id=:cargo_id, unidade_id=:unidade_id
                 WHERE id_usuario=:id
             """), updates | {"id": target_id})
