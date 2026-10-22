@@ -32,12 +32,15 @@ class SettingsTests(unittest.TestCase):
             return Settings(_env_file=None)
 
     def test_environment_types_and_secret_masking(self):
-        settings = self.load(SYNC_DRY_RUN="true", SYNC_BATCH_SIZE="25", LOG_LEVEL="debug")
+        settings = self.load(SYNC_DRY_RUN="true", SYNC_BATCH_SIZE="25", LOG_LEVEL="debug", LEGACY_CPF_KEY="chave-teste-secreta")
         self.assertTrue(settings.sync_dry_run)
         self.assertEqual(settings.sync_batch_size, 25)
         self.assertEqual(settings.log_level, "DEBUG")
         self.assertNotIn(ENV["LEGACY_DB_PASSWORD"], repr(settings))
         self.assertNotIn(ENV["FIREBASE_CREDENTIALS_BASE64"], settings.model_dump_json())
+        self.assertNotIn("chave-teste-secreta", repr(settings))
+        self.assertNotIn("chave-teste-secreta", settings.model_dump_json())
+        self.assertEqual(settings.legacy_cpf_key.get_secret_value(), "chave-teste-secreta")
 
     def test_invalid_configuration_rejected(self):
         for field, value in [

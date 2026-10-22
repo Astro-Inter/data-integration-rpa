@@ -70,6 +70,7 @@ O `.env.example` contém nomes e valores padrão sem credenciais reais.
 | `LEGACY_DB_NAME` | Nome do banco legado. |
 | `LEGACY_DB_USER` | Usuário do legado, preferencialmente com acesso somente de leitura. |
 | `LEGACY_DB_PASSWORD` | Senha do legado; segredo obrigatório. |
+| `LEGACY_CPF_KEY` | Chave PGP usada pelo legado; obrigatória quando `funcionario.cpf` é `BYTEA`. Configure a mesma chave do SQL de origem, como segredo. |
 | `TARGET_DB_HOST` | Servidor PostgreSQL destino, configurado independentemente do legado. |
 | `TARGET_DB_PORT` | Porta do destino; padrão `5432`. |
 | `TARGET_DB_NAME` | Nome do banco destino. |

@@ -12,6 +12,7 @@ const row = {
 
 class LegacyDatabase implements SqlClient {
   async query<Row extends Record<string, unknown>>(sql: string): Promise<{ rows: Row[] }> {
+    if (sql.includes("FROM pg_attribute")) return { rows: [{ column_name: "cpf", encrypted: false } as unknown as Row] };
     if (sql.includes("MAX(id_funcionario)")) return { rows: [{ upper_id: 1 } as Row] };
     if (sql.includes("FROM funcionario AS f")) return { rows: [row as Row] };
     if (sql.includes("FROM email")) return { rows: [{ id_funcionario: 1, id_email: 1, email: "ana@example.com" } as Row] };

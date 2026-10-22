@@ -42,3 +42,16 @@ jobs:
         run: >-
           docker run --rm --network none --read-only rpa-runtime python -c
           "import os,pathlib; assert os.getuid() != 0; assert not pathlib.Path('/app/.env').exists(); assert not pathlib.Path('/app/tests').exists(); import app.main"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Instalar dependências do Worker
+        working-directory: cloudflare
+        run: npm ci
+      - name: Validar tipos e testar Worker com PostgreSQL isolado
+        working-directory: cloudflare
+        env:
+          TEST_POSTGRES_URL: postgresql://rpa_test:rpa_test@127.0.0.1:5432/rpa_test
+        run: |
+          npm run check
+          npm test

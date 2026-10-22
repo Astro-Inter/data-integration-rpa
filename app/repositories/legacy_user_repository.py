@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import Connection, bindparam, text
+from sqlalchemy import Connection, LargeBinary, bindparam, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.legacy_user import LegacyEmail, LegacyUser
@@ -43,9 +43,10 @@ EMAILS = text("""
 
 
 class LegacyUserRepository:
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: Connection, *, cpf_key: str = ""):
         # O chamador mantém e encerra a conexão, inclusive ao interromper a leitura.
         self.connection = connection
+        self._cpf_key = cpf_key
 
     def iter_batches(self, batch_size: int) -> Iterator[list[LegacyUser]]:
         """Varre os IDs existentes até o limite inicial, sem checkpoint persistido."""
@@ -58,13 +59,30 @@ class LegacyUserRepository:
             ).scalar_one()
             if upper_id is None:
                 return
+            columns = {column["name"]: column["type"]
+                       for column in inspect(self.connection).get_columns("funcionario")}
+            encrypted = isinstance(columns["cpf"], LargeBinary)
+            inline_email = "email" in columns
+            if encrypted and not self._cpf_key:
+                raise LegacyReadError("Configure LEGACY_CPF_KEY para ler CPFs criptografados.")
+            user_columns = USER_COLUMNS
+            if encrypted:
+                user_columns = user_columns.replace(
+                    "f.cpf,", "pgp_sym_decrypt(f.cpf, :cpf_key) AS cpf,"
+                )
+            if inline_email:
+                user_columns = user_columns.replace("f.cargo,", "f.cargo, f.email AS funcionario_email,")
+            first_page = text(str(FIRST_PAGE).replace(USER_COLUMNS, user_columns))
+            next_page = text(str(NEXT_PAGE).replace(USER_COLUMNS, user_columns))
             last_id = None
             while True:
                 parameters = {"upper_id": upper_id, "batch_size": batch_size}
-                query = FIRST_PAGE
+                if encrypted:
+                    parameters["cpf_key"] = self._cpf_key
+                query = first_page
                 if last_id is not None:
                     parameters["last_id"] = last_id
-                    query = NEXT_PAGE
+                    query = next_page
                 rows = self.connection.execute(query, parameters).mappings().all()
                 if not rows:
                     return
@@ -72,16 +90,24 @@ class LegacyUserRepository:
                 emails: dict[int, list[LegacyEmail]] = {
                     row["id_funcionario"]: [] for row in rows
                 }
-                email_rows = self.connection.execute(
-                    EMAILS, {"user_ids": list(emails)}
-                ).mappings()
-                for row in email_rows:
-                    emails[row["id_funcionario"]].append(
-                        LegacyEmail(id_email=row["id_email"], email=row["email"])
-                    )
+                if inline_email:
+                    values = [dict(row) for row in rows]
+                    for row in values:
+                        emails[row["id_funcionario"]].append(LegacyEmail(
+                            id_email=row["id_funcionario"], email=row.pop("funcionario_email"),
+                        ))
+                else:
+                    values = rows
+                    email_rows = self.connection.execute(
+                        EMAILS, {"user_ids": list(emails)}
+                    ).mappings()
+                    for row in email_rows:
+                        emails[row["id_funcionario"]].append(
+                            LegacyEmail(id_email=row["id_email"], email=row["email"])
+                        )
                 batch = [
                     LegacyUser(**row, emails=tuple(emails[row["id_funcionario"]]))
-                    for row in rows
+                    for row in values
                 ]
                 last_id = rows[-1]["id_funcionario"]
                 yield batch
@@ -89,5 +115,5 @@ class LegacyUserRepository:
                     return
         except SQLAlchemyError:
             raise LegacyReadError(
-                "Falha ao consultar funcionários no legado. Verifique acesso e estrutura das tabelas."
+                "Falha ao consultar funcionários no legado. Verifique acesso, estrutura, pgcrypto e LEGACY_CPF_KEY."
             ) from None

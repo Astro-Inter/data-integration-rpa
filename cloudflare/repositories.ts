@@ -11,6 +11,20 @@ export interface SqlClient {
 
 type UserRow = Omit<LegacyUser, "emails">;
 type EmailRow = LegacyEmail & { id_funcionario: number };
+type LegacyLayout = { encrypted: boolean; inlineEmail: boolean };
+
+async function legacyLayout(database: SqlClient): Promise<LegacyLayout> {
+  const { rows } = await database.query<{ column_name: string; encrypted: boolean }>(`
+    SELECT attname AS column_name, atttypid = 'bytea'::regtype AS encrypted
+    FROM pg_attribute
+    WHERE attrelid = 'funcionario'::regclass AND attnum > 0 AND NOT attisdropped
+  `);
+  if (!rows.some((row) => row.column_name === "cpf")) throw new Error("estrutura_legado_invalida");
+  return {
+    encrypted: rows.some((row) => row.column_name === "cpf" && row.encrypted),
+    inlineEmail: rows.some((row) => row.column_name === "email"),
+  };
+}
 
 function databaseInteger(value: number | string | null | undefined): number | null {
   if (value == null) return null;
@@ -38,15 +52,37 @@ export async function legacyUpperId(database: SqlClient): Promise<number | null>
 
 export async function legacyBatch(
   database: SqlClient,
+  options: { lastId: number | null; upperId: number; batchSize: number },
+  cpfKey = "",
+): Promise<LegacyUser[]> {
+  return readLegacyBatch(database, options, await legacyLayout(database), cpfKey);
+}
+
+async function readLegacyBatch(
+  database: SqlClient,
   { lastId, upperId, batchSize }: { lastId: number | null; upperId: number; batchSize: number },
+  layout: LegacyLayout,
+  cpfKey: string,
 ): Promise<LegacyUser[]> {
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0) throw new Error("batch_size_invalido");
+  if (layout.encrypted && !cpfKey) throw new Error("Configure LEGACY_CPF_KEY para ler CPFs criptografados.");
+  const pageParameters: unknown[] = lastId === null ? [upperId, batchSize] : [lastId, upperId, batchSize];
+  let columns = USER_COLUMNS;
+  if (layout.encrypted) {
+    pageParameters.push(cpfKey);
+    columns = columns.replace("f.cpf,", `pgp_sym_decrypt(f.cpf, $${pageParameters.length}::text) AS cpf,`);
+  }
+  if (layout.inlineEmail) columns = columns.replace("f.cargo,", "f.cargo, f.email AS funcionario_email,");
   const pageSql = lastId === null
-    ? `${USER_COLUMNS} WHERE f.id_funcionario <= $1 ORDER BY f.id_funcionario LIMIT $2`
-    : `${USER_COLUMNS} WHERE f.id_funcionario > $1 AND f.id_funcionario <= $2 ORDER BY f.id_funcionario LIMIT $3`;
-  const pageParameters = lastId === null ? [upperId, batchSize] : [lastId, upperId, batchSize];
-  const page = await database.query<UserRow>(pageSql, pageParameters);
+    ? `${columns} WHERE f.id_funcionario <= $1 ORDER BY f.id_funcionario LIMIT $2`
+    : `${columns} WHERE f.id_funcionario > $1 AND f.id_funcionario <= $2 ORDER BY f.id_funcionario LIMIT $3`;
+  let page: QueryResult<UserRow & { funcionario_email?: string | null }>;
+  try { page = await database.query(pageSql, pageParameters); }
+  catch { throw new Error("Falha na leitura do legado; verifique acesso, estrutura, pgcrypto e LEGACY_CPF_KEY."); }
   if (page.rows.length === 0) return [];
+  if (layout.inlineEmail) return page.rows.map(({ funcionario_email, ...row }) => ({
+    ...row, emails: [{ id_email: row.id_funcionario, email: funcionario_email ?? null }],
+  }));
 
   const ids = page.rows.map((row) => row.id_funcionario);
   const emailsResult = await database.query<EmailRow>(
@@ -62,13 +98,15 @@ export async function legacyBatch(
 export async function* iterateLegacyBatches(
   database: SqlClient,
   batchSize: number,
+  cpfKey = "",
 ): AsyncGenerator<LegacyUser[], void, void> {
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0) throw new Error("batch_size_invalido");
   const upperId = await legacyUpperId(database);
   if (upperId === null) return;
+  const layout = await legacyLayout(database);
   let lastId: number | null = null;
   while (true) {
-    const batch = await legacyBatch(database, { lastId, upperId, batchSize });
+    const batch = await readLegacyBatch(database, { lastId, upperId, batchSize }, layout, cpfKey);
     if (!batch.length) return;
     lastId = batch[batch.length - 1].id_funcionario;
     yield batch;
