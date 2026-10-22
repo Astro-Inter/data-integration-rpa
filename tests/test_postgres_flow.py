@@ -46,12 +46,12 @@ class PostgresFlowTests(unittest.TestCase):
                 db.execute(text(ddl))
         with self.target.begin() as db:
             for ddl in (
-                "CREATE TABLE workspaces (id_workspace BIGSERIAL PRIMARY KEY, nome VARCHAR(255) NOT NULL, cnpj VARCHAR(14) UNIQUE NOT NULL)",
-                "CREATE TABLE cargos (id_cargo BIGSERIAL PRIMARY KEY, workspace_id BIGINT REFERENCES workspaces NOT NULL, nome VARCHAR(255) NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
-                "CREATE TABLE unidades (id_unidade BIGSERIAL PRIMARY KEY, workspace_id BIGINT REFERENCES workspaces NOT NULL, nome VARCHAR(255) NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
+                "CREATE TABLE workspace (id_workspace BIGSERIAL PRIMARY KEY, nome VARCHAR(255) NOT NULL, cnpj VARCHAR(14) UNIQUE NOT NULL)",
+                "CREATE TABLE cargo (id_cargo BIGSERIAL PRIMARY KEY, workspace_id BIGINT REFERENCES workspace NOT NULL, nome VARCHAR(255) NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
+                "CREATE TABLE unidade (id_unidade BIGSERIAL PRIMARY KEY, workspace_id BIGINT REFERENCES workspace NOT NULL, nome VARCHAR(255) NOT NULL, ativo BOOLEAN DEFAULT TRUE, UNIQUE(workspace_id,nome))",
                 "CREATE TABLE conta (nome VARCHAR(255), email VARCHAR(255) NOT NULL, firebase_uid VARCHAR(128) UNIQUE NOT NULL)",
-                """CREATE TABLE usuarios (id_usuario BIGSERIAL PRIMARY KEY, cpf CHAR(11) UNIQUE,
-                   cargo_id BIGINT NOT NULL REFERENCES cargos, unidade_id BIGINT NOT NULL REFERENCES unidades,
+                """CREATE TABLE usuario (id_usuario BIGSERIAL PRIMARY KEY, cpf CHAR(11) UNIQUE,
+                   cargo_id BIGINT NOT NULL REFERENCES cargo, unidade_id BIGINT NOT NULL REFERENCES unidade,
                    tipo TEXT NOT NULL CHECK(tipo IN ('GESTOR','GESTOR_WORKSPACE','COLABORADOR')),
                    status TEXT DEFAULT 'PRE_CADASTRADO' NOT NULL, modalidade TEXT,
                    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(email), UNIQUE(firebase_uid)) INHERITS (conta)""",
@@ -103,22 +103,22 @@ class PostgresFlowTests(unittest.TestCase):
     def test_full_flow_repeat_update_and_inheritance(self):
         self.assertEqual(self.execute_rpa(dry_run=True), 0)
         self.assertEqual(self.creates, 0)
-        self.assertEqual(self.count("usuarios"), 0)
+        self.assertEqual(self.count("usuario"), 0)
         self.assertEqual(self.execute_rpa(), 0)
         self.assertEqual(self.execute_rpa(), 0)
         self.assertEqual(self.creates, 1)
-        self.assertEqual(self.count("usuarios"), 1)
+        self.assertEqual(self.count("usuario"), 1)
         self.assertEqual(self.count("ONLY conta"), 0)
         self.assertEqual(self.count("conta"), 1)
         with self.admin.begin() as db:
             db.execute(text(f'UPDATE "{self.schemas[0]}".funcionario SET nome=\'Ana Silva\', cargo=\'Gestora\''))
         with self.target.begin() as db:
-            db.execute(text("UPDATE usuarios SET status='DESATIVADO', tipo='GESTOR', modalidade='Híbrida'"))
+            db.execute(text("UPDATE usuario SET status='DESATIVADO', tipo='GESTOR', modalidade='Híbrida'"))
         self.assertEqual(self.execute_rpa(), 0)
         with self.target.connect() as db:
-            row = db.execute(text("SELECT nome,tipo,status,modalidade FROM usuarios")).one()
+            row = db.execute(text("SELECT nome,tipo,status,modalidade FROM usuario")).one()
             self.assertEqual(tuple(row), ("Ana Silva", "GESTOR", "DESATIVADO", "Híbrida"))
-        self.assertEqual(self.count("cargos"), 2)
+        self.assertEqual(self.count("cargo"), 2)
         self.assertEqual(self.count("rpa_user_links"), 1)
 
     def test_postgres_failure_after_firebase_creation_rolls_back_and_retries(self):
@@ -127,16 +127,16 @@ class PostgresFlowTests(unittest.TestCase):
             db.execute(text("INSERT INTO funcionario VALUES (2,'Bruno','11144477735','Analista',1,10)"))
             db.execute(text("INSERT INTO email VALUES (2,2,'bruno@example.com')"))
         with self.target.begin() as db:
-            db.execute(text("ALTER TABLE usuarios ADD CONSTRAINT reject_test CHECK (nome <> 'Bruno')"))
+            db.execute(text("ALTER TABLE usuario ADD CONSTRAINT reject_test CHECK (nome <> 'Bruno')"))
         self.assertEqual(self.execute_rpa(), 1)
         self.assertEqual(self.creates, 2)
-        for table in ("usuarios", "workspaces", "cargos", "unidades", "rpa_sync_users", "rpa_sync_control", "rpa_user_links"):
+        for table in ("usuario", "workspace", "cargo", "unidade", "rpa_sync_users", "rpa_sync_control", "rpa_user_links"):
             self.assertEqual(self.count(table), 0)
         with self.target.begin() as db:
-            db.execute(text("ALTER TABLE usuarios DROP CONSTRAINT reject_test"))
+            db.execute(text("ALTER TABLE usuario DROP CONSTRAINT reject_test"))
         self.assertEqual(self.execute_rpa(), 0)
         self.assertEqual(self.creates, 2)
-        self.assertEqual(self.count("usuarios"), 2)
+        self.assertEqual(self.count("usuario"), 2)
         self.assertEqual(self.count("rpa_sync_users"), 2)
 
     def test_lock_serializes_concurrent_writers(self):

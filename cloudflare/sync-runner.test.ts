@@ -26,8 +26,8 @@ class DestinationDatabase implements SqlClient {
     if (sql.includes("SELECT last_synced_at")) return { rows: [] };
     if (sql.includes("SELECT legacy_id, data_hash")) return { rows: [] };
     if (sql.includes("RETURNING id_workspace")) return { rows: [{ id_workspace: 9 } as Row] };
-    if (sql.includes("AS id FROM cargos")) return { rows: [{ id: 17 } as Row] };
-    if (sql.includes("AS id FROM unidades")) return { rows: [{ id: 23 } as Row] };
+    if (sql.includes("AS id FROM cargo")) return { rows: [{ id: 17 } as Row] };
+    if (sql.includes("AS id FROM unidade")) return { rows: [{ id: 23 } as Row] };
     if (sql.includes("RETURNING id_usuario")) return { rows: [{ id_usuario: 101 } as Row] };
     return { rows: [] };
   }
@@ -55,7 +55,7 @@ test("real sync confirms each changed user only after Firebase and database pers
   const db = destination as DestinationDatabase & { query: SqlClient["query"] };
   const originalQuery = db.query.bind(db);
   db.query = async (sql: string, parameters?: unknown[]) => {
-    if (sql.includes("INSERT INTO usuarios")) order.push("persist");
+    if (sql.includes("INSERT INTO usuario")) order.push("persist");
     if (sql.includes("INSERT INTO rpa_sync_users")) order.push("confirm");
     return originalQuery(sql, parameters);
   };

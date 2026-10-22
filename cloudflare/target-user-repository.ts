@@ -49,7 +49,7 @@ export class TargetUserRepository {
 
     const { rows } = await this.database.query<ExistingUser>(
       `SELECT id_usuario, cpf, email, firebase_uid, cargo_id, unidade_id
-       FROM usuarios WHERE cpf = $1 OR lower(trim(email)) = $2
+       FROM usuario WHERE cpf = $1 OR lower(trim(email)) = $2
           OR firebase_uid = $3 OR id_usuario = $4 FOR UPDATE`,
       [user.usuario.cpf, email, uid, link ? integer(link.target_id) : null],
     );
@@ -74,9 +74,9 @@ export class TargetUserRepository {
 
     const { rows: relationRows } = await this.database.query<{ cargo_cnpj: string; unidade_cnpj: string }>(
       `SELECT wc.cnpj AS cargo_cnpj, wu.cnpj AS unidade_cnpj
-       FROM cargos c JOIN workspaces wc ON wc.id_workspace = c.workspace_id
-       JOIN unidades u ON u.id_unidade = $1
-       JOIN workspaces wu ON wu.id_workspace = u.workspace_id
+       FROM cargo c JOIN workspace wc ON wc.id_workspace = c.workspace_id
+       JOIN unidade u ON u.id_unidade = $1
+       JOIN workspace wu ON wu.id_workspace = u.workspace_id
        WHERE c.id_cargo = $2`,
       [integer(row.unidade_id), integer(row.cargo_id)],
     );
@@ -96,19 +96,19 @@ export class TargetUserRepository {
     const row = await this.identity(user, uid);
     const workspace = workspacePayload(user);
     const { rows: workspaceRows } = await this.database.query<{ id_workspace: number | string }>(
-      `INSERT INTO workspaces (nome, cnpj) VALUES ($1, $2)
+      `INSERT INTO workspace (nome, cnpj) VALUES ($1, $2)
        ON CONFLICT (cnpj) DO UPDATE SET nome = EXCLUDED.nome
        RETURNING id_workspace`,
       [workspace.nome, workspace.cnpj],
     );
     const workspaceId = integer(workspaceRows[0]?.id_workspace);
-    const jobId = await this.organization("cargos", "id_cargo", organizationPayload(workspaceId, user.cargo.nome));
-    const unitId = await this.organization("unidades", "id_unidade", organizationPayload(workspaceId, user.unidade.nome));
+    const jobId = await this.organization("cargo", "id_cargo", organizationPayload(workspaceId, user.cargo.nome));
+    const unitId = await this.organization("unidade", "id_unidade", organizationPayload(workspaceId, user.unidade.nome));
     const payload = targetInsertPayload(user, { firebase_uid: uid, cargo_id: jobId, unidade_id: unitId });
     let targetId: number;
     if (!row) {
       const { rows } = await this.database.query<{ id_usuario: number | string }>(
-        `INSERT INTO usuarios (nome, email, cpf, firebase_uid, cargo_id, unidade_id, tipo, status)
+        `INSERT INTO usuario (nome, email, cpf, firebase_uid, cargo_id, unidade_id, tipo, status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id_usuario`,
         [payload.nome, payload.email, payload.cpf, payload.firebase_uid,
           payload.cargo_id, payload.unidade_id, payload.tipo, payload.status],
@@ -118,7 +118,7 @@ export class TargetUserRepository {
       targetId = integer(row.id_usuario);
       const update = targetUpdatePayload(user, { firebase_uid: uid, cargo_id: jobId, unidade_id: unitId });
       await this.database.query(
-        `UPDATE usuarios SET nome = $1, email = $2, cpf = $3,
+        `UPDATE usuario SET nome = $1, email = $2, cpf = $3,
            firebase_uid = $4, cargo_id = $5, unidade_id = $6 WHERE id_usuario = $7`,
         [update.nome, update.email, update.cpf, update.firebase_uid,
           update.cargo_id, update.unidade_id, targetId],
@@ -139,7 +139,7 @@ export class TargetUserRepository {
   }
 
   private async organization(
-    table: "cargos" | "unidades",
+    table: "cargo" | "unidade",
     idColumn: "id_cargo" | "id_unidade",
     payload: { workspace_id: number; nome: string; ativo: true },
   ): Promise<number> {
