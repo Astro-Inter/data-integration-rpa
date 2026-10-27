@@ -1,3 +1,4 @@
+import { observe, diagnostic } from "./diagnostics.ts";
 import { FirebaseAuthClient, parseServiceAccount } from "./firebase-auth.ts";
 import { withHyperdriveSessions, type HyperdriveBinding } from "./hyperdrive.ts";
 import { manualDryRun } from "./policy.ts";
@@ -30,9 +31,9 @@ function batchSize(env: Env): number {
 
 async function execute(env: Env, dryRun: boolean): Promise<SyncSummary> {
   if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_CREDENTIALS_BASE64) {
-    throw new Error("Configuração Firebase ausente.");
+    await observe("firebase_configuration", "firebase", () => { throw new Error("Configuração Firebase ausente."); });
   }
-  const credential = parseServiceAccount(env.FIREBASE_CREDENTIALS_BASE64, env.FIREBASE_PROJECT_ID);
+  const credential = await observe("firebase_configuration", "firebase", () => parseServiceAccount(env.FIREBASE_CREDENTIALS_BASE64, env.FIREBASE_PROJECT_ID));
   const firebase = new FirebaseAuthClient(env.FIREBASE_PROJECT_ID, credential, dryRun);
   return withHyperdriveSessions(env.LEGACY_DB, env.TARGET_DB, dryRun, (legacy, destination) =>
     runUserSync({ legacy, destination, firebase, batchSize: batchSize(env), dryRun, legacyCpfKey: env.LEGACY_CPF_KEY }),
@@ -79,16 +80,18 @@ export default {
       return jsonError("migration_not_activated", 503);
     }
 
+    const runId = crypto.randomUUID();
+    const started = Date.now();
     try {
       const summary = await execute(env, dryRun);
       queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_finished", "INFO",
-        { job: JOB_NAME, status: "success", dry_run: dryRun });
+        { job: JOB_NAME, status: "success", dry_run: dryRun, run_id: runId, duration_ms: Date.now() - started, total: summary.total, changed: summary.changed, confirmed: summary.confirmed, invalid: summary.invalid });
       return Response.json({ job: JOB_NAME, dry_run: dryRun, status: "success", ...summary }, {
         headers: { "Cache-Control": "no-store" },
       });
-    } catch {
-      // Provider/driver errors can contain emails, identifiers, and connection details.
-      queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_failed", "ERROR", { job: JOB_NAME });
+    } catch (error) {
+      console.error(JSON.stringify({ event: "rpa_sync_failed", run_id: runId, ...diagnostic(error) }));
+      queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_failed", "ERROR", { job: JOB_NAME, run_id: runId, status: "failed", duration_ms: Date.now() - started, dry_run: dryRun, ...diagnostic(error) });
       return jsonError("job_failed_check_worker_logs", 500);
     }
   },
@@ -100,16 +103,17 @@ export default {
       return;
     }
     const dryRun = env.SYNC_DRY_RUN === "true";
+    const runId = crypto.randomUUID();
+    const started = Date.now();
     try {
       const summary = await execute(env, dryRun);
       queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_finished", "INFO",
-        { job: JOB_NAME, status: "success", dry_run: dryRun });
-      console.log(JSON.stringify({ event: "job_finished", job: JOB_NAME, dry_run: dryRun, ...summary }));
-    } catch {
-      // Keep credentials, user records, SQL errors, and Firebase responses out of logs.
-      queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_failed", "ERROR", { job: JOB_NAME });
-      console.error(JSON.stringify({ event: "job_failed", job: JOB_NAME }));
-      throw new Error("RPA sync failed; inspect sanitized worker logs.");
+        { job: JOB_NAME, status: "success", dry_run: dryRun, run_id: runId, duration_ms: Date.now() - started, total: summary.total, changed: summary.changed, confirmed: summary.confirmed, invalid: summary.invalid });
+      console.log(JSON.stringify({ event: "job_finished", job: JOB_NAME, run_id: runId, duration_ms: Date.now() - started, dry_run: dryRun, ...summary }));
+    } catch (error) {
+      console.error(JSON.stringify({ event: "rpa_sync_failed", run_id: runId, ...diagnostic(error) }));
+      queueGrafanaLog(ctx, env, "data-integration-rpa", "rpa_sync_failed", "ERROR", { job: JOB_NAME, run_id: runId, status: "failed", duration_ms: Date.now() - started, dry_run: dryRun, ...diagnostic(error) });
+      throw new Error(`RPA sync failed; inspect sanitized worker logs. run_id=${runId}`);
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import worker from "./worker.ts";
 
 const env = { API_ENABLED: "true", JOBS_ENABLED: "false", JOBS_TOKEN: "x".repeat(40), SYNC_DRY_RUN: "true" } as never;
+
+test("falha de configuração exporta etapa e run_id sem depender de mensagem bruta", async () => {
+  const exported: Promise<void>[] = [];
+  const bodies: string[] = [];
+  const fetcher = mock.method(globalThis, "fetch", async (_url: unknown, init: RequestInit) => {
+    bodies.push(String(init.body));
+    return new Response(null, { status: 204 });
+  });
+  const consoleError = mock.method(console, "error", () => {});
+  try {
+    const response = await worker.fetch!(new Request("https://worker.example/jobs/sync-users?dry_run=true", {
+      method: "POST", headers: { Authorization: `Bearer ${"x".repeat(40)}` },
+    }), { ...env, GRAFANA_OTLP_ENDPOINT: "https://collector.example/otlp", GRAFANA_OTLP_HEADERS: "Authorization=Basic%20fixture" } as never,
+    { waitUntil: promise => exported.push(promise) } as ExecutionContext);
+    await Promise.all(exported);
+    assert.equal(response.status, 500);
+    const attributes = JSON.parse(bodies[0]!).resourceLogs[0].scopeLogs[0].logRecords[0].attributes;
+    assert.ok(attributes.some((attribute: { key: string; value: { stringValue?: string } }) => attribute.key === "stage" && attribute.value.stringValue === "firebase_configuration"));
+    assert.ok(attributes.some((attribute: { key: string }) => attribute.key === "run_id"));
+    assert.doesNotMatch(bodies.join(), /fixture|Bearer|FIREBASE_CREDENTIALS/);
+  } finally { fetcher.mock.restore(); consoleError.mock.restore(); }
+});
 
 test("health endpoint exposes only non-sensitive service state", async () => {
   const response = await worker.fetch!(new Request("https://worker.example/health"), env, {} as ExecutionContext);

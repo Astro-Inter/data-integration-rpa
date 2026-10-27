@@ -1,3 +1,4 @@
+import { observe, diagnostic } from "./diagnostics.ts";
 import { prepareUser, UserDataError, userFingerprint } from "./domain.ts";
 import { FirebaseAuthClient, FirebaseServiceError } from "./firebase-auth.ts";
 import { iterateLegacyBatches, SyncStateRepository, type SqlClient } from "./repositories.ts";
@@ -64,16 +65,16 @@ export async function runUserSync(options: SyncOptions): Promise<SyncSummary> {
       if (!confirm) continue;
 
       try {
-        const knownUid = await targetUsers.resolveIdentity(prepared);
-        const result = await options.firebase.ensureUser(prepared, knownUid ?? undefined);
+        const knownUid = await observe("resolve_identity", "postgresql_target", () => targetUsers.resolveIdentity(prepared));
+        const result = await observe("ensure_user", "firebase", () => options.firebase.ensureUser(prepared, knownUid ?? undefined));
         if (!result.uid) throw new FirebaseServiceError("UID Firebase não confirmado.");
-        await targetUsers.persist(prepared, result.uid);
+        await observe("persist_user", "postgresql_target", () => targetUsers.persist(prepared, result.uid!));
         await state.confirmUser(user.id_funcionario, fingerprint, new Date().toISOString());
         summary.confirmed++;
       } catch (error) {
         if (error instanceof FirebaseServiceError || error instanceof TargetIdentityError || error instanceof UserDataError) throw error;
         // Driver and transport details may include identifiers or connection data.
-        throw new Error("Falha na persistência da integração.");
+        throw new Error("Falha na persistência da integração.", { cause: error });
       }
     }
   }
