@@ -1,3 +1,4 @@
+import { observe, diagnostic } from "./diagnostics.ts";
 import { Client } from "pg";
 import type { QueryResult, SqlClient } from "./repositories.ts";
 
@@ -9,9 +10,10 @@ export class PostgresSession implements SqlClient {
   private readonly client: PgClient;
   private active = false;
 
-  constructor(client: PgClient) { this.client = client; }
+  private readonly dependency: string;
+  constructor(client: PgClient, dependency = "postgresql") { this.client = client; this.dependency = dependency; }
 
-  async connect(): Promise<void> { await this.client.connect(); }
+  async connect(): Promise<void> { await observe("connect", this.dependency, () => this.client.connect()); }
 
   async begin(readOnly: boolean): Promise<void> {
     if (this.active) throw new Error("transacao_ja_aberta");
@@ -24,7 +26,7 @@ export class PostgresSession implements SqlClient {
     sql: string,
     parameters: unknown[] = [],
   ): Promise<QueryResult<Row>> {
-    const result = await this.client.query(sql, parameters);
+    const result = await observe("query", this.dependency, () => this.client.query(sql, parameters));
     return { rows: result.rows as Row[] };
   }
 
@@ -58,17 +60,17 @@ export async function withHyperdriveSessions<T>(
   operation: (legacy: PostgresSession, target: PostgresSession) => Promise<T>,
   clientFactory: ClientFactory = defaultClientFactory,
 ): Promise<T> {
-  const legacy = new PostgresSession(clientFactory(legacyBinding));
-  const target = new PostgresSession(clientFactory(targetBinding));
+  const legacy = new PostgresSession(clientFactory(legacyBinding), "postgresql_legacy");
+  const target = new PostgresSession(clientFactory(targetBinding), "postgresql_target");
   let targetConnected = false;
   try {
     await legacy.connect();
-    await legacy.begin(true);
+    await observe("legacy_begin", "postgresql", () => legacy.begin(true));
     await target.connect();
     targetConnected = true;
-    await target.begin(dryRun);
+    await observe("target_begin", "postgresql", () => target.begin(dryRun));
     const result = await operation(legacy, target);
-    if (!dryRun) await target.commit();
+    if (!dryRun) await observe("target_commit", "postgresql", () => target.commit());
     else await target.rollback();
     return result;
   } catch (error) {

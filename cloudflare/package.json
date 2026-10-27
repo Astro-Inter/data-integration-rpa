@@ -6,7 +6,8 @@
     "check": "node ./node_modules/typescript/bin/tsc --noEmit",
     "deploy": "node deploy.mjs",
     "dev": "wrangler dev",
-    "test": "node --experimental-strip-types --test policy.test.ts domain.test.ts repositories.test.ts postgres-legacy.test.ts firebase-auth.test.ts target-user-repository.test.ts sync-runner.test.ts hyperdrive.test.ts worker.test.ts grafana-logs.test.ts"
+    "test": "node --experimental-strip-types --test policy.test.ts domain.test.ts repositories.test.ts postgres-legacy.test.ts firebase-auth.test.ts target-user-repository.test.ts sync-runner.test.ts hyperdrive.test.ts worker.test.ts grafana-logs.test.ts && npm run test:diagnostics",
+    "test:diagnostics": "node --experimental-strip-types --test ../diagnostics.contract.mjs"
   },
   "dependencies": {
     "pg": "8.16.3"

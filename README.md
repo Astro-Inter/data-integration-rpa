@@ -232,3 +232,7 @@ herança, bloqueios, rollback e recuperação após falha parcial. Firebase cont
 simulado. Veja os comandos e limites em [Automação e operação](docs/automacao-e-operacao.md).
 Para validar o acesso aos serviços reais sem gravar, execute `python -m app.main`
 com o `.env` preenchido, serviços acessíveis e `SYNC_DRY_RUN=true`.
+
+## Diagnóstico operacional
+
+Consulte [os campos e limites dos novos diagnósticos](docs/observability-diagnostics.md) para investigar falhas por requisição ou execução no Grafana.
