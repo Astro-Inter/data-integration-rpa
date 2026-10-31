@@ -1,3 +1,4 @@
+from memory_firestore import MemoryFirestore
 """Teste PostgreSQL real, opt-in via TEST_POSTGRES_URL em banco descartável."""
 
 import os
@@ -59,7 +60,8 @@ class PostgresFlowTests(unittest.TestCase):
                 "CREATE TABLE admin (id_admin BIGSERIAL PRIMARY KEY, UNIQUE(email), UNIQUE(firebase_uid)) INHERITS (conta)",
             ):
                 db.execute(text(ddl))
-            metadata.create_all(db)
+            # Sem tabelas SQL de controle na execução Firestore.
+        self.firestore = MemoryFirestore()
         self.accounts = {}
         self.creates = 0
 
@@ -88,6 +90,7 @@ class PostgresFlowTests(unittest.TestCase):
             LEGACY_CPF_KEY=cpf_key,
         )
         with patch("app.main.Settings", return_value=settings), \
+             patch("app.main.firestore.client", return_value=self.firestore), \
              patch("app.services.integrations.initialize_firebase", return_value=object()), \
              patch("app.services.integrations.firebase_admin.delete_app"), \
              patch("app.services.integrations.check_firebase_connection"), \
@@ -99,6 +102,11 @@ class PostgresFlowTests(unittest.TestCase):
                 return main()
 
     def count(self, table):
+        collections = {"rpa_sync_users": "/usuarios/", "rpa_user_links": "/usuarios/", "rpa_sync_control": None}
+        if table in collections:
+            if table == "rpa_sync_control":
+                return int("rpa_integracoes/usuarios_legado" in self.firestore.data)
+            return sum(collections[table] in path for path in self.firestore.data)
         with self.target.connect() as db:
             return db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar_one()
 
@@ -141,17 +149,6 @@ class PostgresFlowTests(unittest.TestCase):
         self.assertEqual(self.count("usuario"), 2)
         self.assertEqual(self.count("rpa_sync_users"), 2)
 
-    def test_lock_serializes_concurrent_writers(self):
-        with self.target.begin() as db:
-            SyncStateRepository(db).lock_sync()
-        with self.target.begin() as first:
-            SyncStateRepository(first).lock_sync()
-            with self.assertRaises(DBAPIError), self.target.begin() as second:
-                second.execute(text("SET LOCAL lock_timeout = '100ms'"))
-                SyncStateRepository(second).lock_sync()
-        with self.target.begin() as db:
-            SyncStateRepository(db).lock_sync()
-
     def test_legacy_connection_is_read_only(self):
         with self.assertRaises(DBAPIError), self.legacy.begin() as db:
             db.execute(text("UPDATE funcionario SET nome='não permitido'"))
@@ -174,14 +171,14 @@ class PostgresFlowTests(unittest.TestCase):
         self.assertEqual(self.execute_rpa(cpf_key="chave-pgp-teste"), 0)
         with self.target.connect() as db:
             self.assertEqual(db.execute(text("SELECT cpf FROM usuario")).scalar_one(), "01234567890")
-            confirmed = db.execute(text("SELECT synced_at FROM rpa_sync_users")).scalar_one()
+            confirmed = self.firestore.data["rpa_integracoes/usuarios_legado/usuarios/1"]["synced_at"]
         with self.admin.begin() as db:
             db.execute(text(f'SET LOCAL search_path TO "{self.schemas[0]}", public'))
             db.execute(text("UPDATE funcionario SET cpf=pgp_sym_encrypt('01234567890', :key)"), {"key": "chave-pgp-teste"})
         self.assertEqual(self.execute_rpa(cpf_key="chave-pgp-teste"), 0)
         self.assertEqual(self.creates, 1)
         with self.target.connect() as db:
-            self.assertEqual(db.execute(text("SELECT synced_at FROM rpa_sync_users")).scalar_one(), confirmed)
+            self.assertEqual(self.firestore.data["rpa_integracoes/usuarios_legado/usuarios/1"]["synced_at"], confirmed)
 
     def test_encrypted_cpf_with_previous_email_table(self):
         self.encrypt_legacy(inline_email=False)

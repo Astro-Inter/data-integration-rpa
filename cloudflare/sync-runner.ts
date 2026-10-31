@@ -1,3 +1,4 @@
+import type { SyncState } from "./firestore-state.ts";
 import { observe, diagnostic } from "./diagnostics.ts";
 import { prepareUser, UserDataError, userFingerprint } from "./domain.ts";
 import { FirebaseAuthClient, FirebaseServiceError } from "./firebase-auth.ts";
@@ -23,6 +24,7 @@ export type SyncOptions = {
   batchSize: number;
   dryRun: boolean;
   legacyCpfKey?: string;
+  state?: SyncState;
 };
 
 export async function runUserSync(options: SyncOptions): Promise<SyncSummary> {
@@ -30,8 +32,8 @@ export async function runUserSync(options: SyncOptions): Promise<SyncSummary> {
   if (options.destination.transactionActive && !options.destination.transactionActive()) {
     throw new Error("transacao_destino_obrigatoria");
   }
-  const state = new SyncStateRepository(options.destination);
-  const targetUsers = new TargetUserRepository(options.destination);
+  const state = options.state ?? new SyncStateRepository(options.destination);
+  const targetUsers = new TargetUserRepository(options.destination, options.state);
   const confirm = !options.dryRun;
   if (confirm) await state.lockSync();
 

@@ -43,3 +43,10 @@ O Worker envia eventos resumidos de sucesso ou falha em OTLP/HTTP para
 GRAFANA_OTLP_ENDPOINT; GRAFANA_OTLP_HEADERS é um Secret do Worker. Os eventos
 não incluem registros de usuários ou credenciais, e uma falha do Grafana não
 interrompe a sincronização.
+
+## Controle Firestore
+
+O Worker usa a conta de serviço existente, com escopo OAuth datastore e IAM
+para ler e gravar documentos. `FIRESTORE_DATABASE_ID` seleciona o banco
+(padrão `(default)`). O controle independe da opção de logs.
+Consulte [operação e recuperação](../docs/controle-firestore.md).

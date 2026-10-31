@@ -1,5 +1,12 @@
 # Persistência no destino — SCRUM-184
 
+> **Controle atual:** Python e Worker usam Firestore por padrão. As tabelas SQL
+> descritas abaixo pertencem à implementação anterior e não são necessárias para
+> executar a versão atual. Consulte [Controle no Firestore](controle-firestore.md)
+> para coleções, permissões, confirmação e recuperação. Não execute o inicializador
+> SQL para corrigir falhas desta versão.
+
+
 O `main` agora executa o fluxo completo quando `SYNC_DRY_RUN=false`:
 consulta legado → compara hashes → valida candidato → verifica identidade no
 destino → localiza/cria Firebase → persiste relações e usuário → confirma controle.

@@ -1,3 +1,4 @@
+from memory_firestore import MemoryFirestore
 """Executa as consultas em SQLite com dados fictícios e escrita bloqueada."""
 
 import unittest
@@ -13,6 +14,9 @@ import test_settings
 
 class LegacyUserRepositoryTests(unittest.TestCase):
     def setUp(self):
+        firestore_patch = patch("app.main.firestore.client", return_value=MemoryFirestore())
+        firestore_patch.start()
+        self.addCleanup(firestore_patch.stop)
         self.engine = create_engine("sqlite://")
         self.addCleanup(self.engine.dispose)
         self.connection = self.engine.connect()

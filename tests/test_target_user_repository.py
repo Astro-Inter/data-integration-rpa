@@ -1,3 +1,4 @@
+from memory_firestore import MemoryFirestore
 """Fluxo com SQL real em SQLite, constraints e Firebase simulado."""
 
 from dataclasses import replace
@@ -37,6 +38,9 @@ DDL = (
 
 class TargetTests(unittest.TestCase):
     def setUp(self):
+        firestore_patch = patch("app.main.firestore.client", return_value=MemoryFirestore())
+        firestore_patch.start()
+        self.addCleanup(firestore_patch.stop)
         self.engine = create_engine("sqlite://")
         self.addCleanup(self.engine.dispose)
         with self.engine.begin() as db:
