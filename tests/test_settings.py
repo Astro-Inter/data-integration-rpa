@@ -1,3 +1,4 @@
+from memory_firestore import MemoryFirestore
 """Verifica configuração e erros sem usar credenciais ou serviços reais."""
 
 import os
@@ -27,6 +28,11 @@ ENV = {
 
 
 class SettingsTests(unittest.TestCase):
+    def setUp(self):
+        firestore_patch = patch("app.main.firestore.client", return_value=MemoryFirestore())
+        firestore_patch.start()
+        self.addCleanup(firestore_patch.stop)
+
     def load(self, **overrides):
         with patch.dict(os.environ, ENV | overrides, clear=True):
             return Settings(_env_file=None)

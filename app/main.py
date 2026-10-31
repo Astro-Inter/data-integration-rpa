@@ -14,7 +14,8 @@ from app.config.settings import Settings
 from app.observability import configure_observability
 from app.services.integrations import IntegrationError, open_integrations
 from app.repositories.legacy_user_repository import LegacyReadError, LegacyUserRepository
-from app.repositories.sync_state_repository import SyncStateRepository
+from firebase_admin import firestore
+from app.repositories.firestore_sync_state import FirestoreSyncState, FirestoreStateError
 from app.services.change_tracking_service import ChangeTrackingService
 from app.services.user_preparation_service import UserDataError
 from app.services.firebase_user_service import FirebaseUserError, FirebaseUserService
@@ -70,22 +71,27 @@ def run(execution: ExecutionLog) -> int:
                 extra={"operation": "connect_integrations", "status": "ok"},
             )
             with ExitStack() as connections:
+                report.set_stage("Firestore", "Abrir controle de sincronização")
+                state = connections.enter_context(FirestoreSyncState(
+                    firestore.client(integrations.firebase, database_id=settings.firestore_database_id),
+                ))
                 report.set_stage("PostgreSQL legado", "Abrir conexão para leitura")
                 connection = connections.enter_context(integrations.legacy.connect())
                 report.set_stage("PostgreSQL destino", "Abrir transação de sincronização")
                 target = connections.enter_context(integrations.target.begin())
-                report.set_stage("PostgreSQL destino", "Consultar ou confirmar controle de sincronização")
+                report.set_stage("Firestore", "Consultar ou preparar controle de sincronização")
+                state.connection = target
                 execution.event(Event.PROCESSING)
                 repository = LegacyUserRepository(
                     connection, cpf_key=settings.legacy_cpf_key.get_secret_value(),
                 )
                 processor = UserSyncProcessor(
                     FirebaseUserService(integrations.firebase, dry_run=settings.sync_dry_run),
-                    resolve_identity=lambda user, db: TargetUserRepository(db).resolve_identity(user),
-                    persist_user=lambda user, uid, db: TargetUserRepository(db).persist(user, uid),
+                    resolve_identity=lambda user, db: TargetUserRepository(db, state).resolve_identity(user),
+                    persist_user=lambda user, uid, db: TargetUserRepository(db, state).persist(user, uid),
                     on_stage=report.set_stage,
                 )
-                summary = ChangeTrackingService(repository, SyncStateRepository(target)).run(
+                summary = ChangeTrackingService(repository, state).run(
                     settings.sync_batch_size, dry_run=settings.sync_dry_run,
                     process_user=processor,
                     on_invalid=report.validation,
@@ -108,9 +114,11 @@ def run(execution: ExecutionLog) -> int:
             if summary.invalid:
                 execution.event(Event.VALIDATION_ERROR)
                 return 1
-    except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError, TargetIdentityError) as exc:
+    except (IntegrationError, LegacyReadError, UserDataError, FirebaseUserError, TargetIdentityError, FirestoreStateError) as exc:
         if isinstance(exc, IntegrationError):
             report.add("Verifique configuração, credenciais, rede e permissões de acesso.", system=exc.system, stage=exc.stage)
+        elif isinstance(exc, FirestoreStateError):
+            report.add(str(exc), system="Firestore", stage="Controle de sincronização")
         elif isinstance(exc, LegacyReadError):
             report.add(str(exc), system="PostgreSQL legado", stage="Consulta dos usuários")
         elif isinstance(exc, UserDataError):
@@ -122,6 +130,7 @@ def run(execution: ExecutionLog) -> int:
         else:
             report.add(str(exc), system="PostgreSQL destino")
         execution.event({
+            FirestoreStateError: Event.INTEGRATION_ERROR,
             IntegrationError: Event.INTEGRATION_ERROR,
             LegacyReadError: Event.LEGACY_ERROR,
             UserDataError: Event.VALIDATION_ERROR,
@@ -143,7 +152,7 @@ def run(execution: ExecutionLog) -> int:
         }
         report.add(reasons.get(state, "Falha SQL/conexão. Confira acesso, schema, constraints e controle de sincronização."))
         execution.event(Event.DATABASE_ERROR)
-        logger.error("Falha de acesso aos bancos ou ao controle. Verifique as tabelas rpa_sync_control e rpa_sync_users no destino.")
+        logger.error("Falha de acesso aos bancos ou ao controle. Verifique estrutura e permissões do destino.")
         return 1
     return 0
 

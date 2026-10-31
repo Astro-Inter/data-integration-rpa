@@ -67,3 +67,26 @@ test("real sync confirms each changed user only after Firebase and database pers
   assert.equal(result.confirmed, 1);
   assert.ok(destination.calls.some((sql) => sql.includes("UPDATE rpa_sync_control")));
 });
+
+
+test("Firestore runtime path never queries SQL control tables and leaves publication to post-commit caller", async () => {
+  const destination = new DestinationDatabase();
+  const actions: string[] = [];
+  const state = {
+    lastSyncedAt: async () => null,
+    confirmedHashes: async () => new Map<number, string>(),
+    lockSync: async () => { actions.push("lock"); },
+    getLink: async () => null,
+    checkLink: async () => {},
+    stageLink: async () => { actions.push("stage-link"); },
+    confirmUser: async () => { actions.push("stage-hash"); },
+    confirmRun: async () => { actions.push("stage-run"); },
+  };
+  const firebase = { ensureUser: async () => ({ uid: "real-uid" }) } as unknown as FirebaseAuthClient;
+  const summary = await runUserSync({
+    legacy: new LegacyDatabase(), destination, firebase, state, batchSize: 20, dryRun: false,
+  });
+  assert.equal(summary.confirmed, 1);
+  assert.deepEqual(actions, ["lock", "stage-link", "stage-hash", "stage-run"]);
+  assert.ok(destination.calls.every(sql => !/rpa_sync_|rpa_user_links/.test(sql)));
+});

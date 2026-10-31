@@ -1,7 +1,7 @@
 import { normalizeEmail, type PreparedUser } from "./domain.ts";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const AUTH_SCOPE = "https://www.googleapis.com/auth/identitytoolkit";
+const AUTH_SCOPE = "https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/datastore";
 const AUTH_API = "https://identitytoolkit.googleapis.com/v1/projects";
 
 export type FirebaseAccount = { uid: string; email: string; disabled: boolean };
@@ -74,7 +74,7 @@ export class FirebaseAuthClient {
     this.fetcher = fetcher;
   }
 
-  private async oauthToken(): Promise<string> {
+  async oauthToken(): Promise<string> {
     if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return this.accessToken;
     const now = Math.floor(Date.now() / 1000);
     const unsigned = `${encodedJson({ alg: "RS256", typ: "JWT" })}.${encodedJson({

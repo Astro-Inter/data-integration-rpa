@@ -1,3 +1,4 @@
+import { FirestoreState } from "./firestore-state.ts";
 import { observe, diagnostic } from "./diagnostics.ts";
 import { FirebaseAuthClient, parseServiceAccount } from "./firebase-auth.ts";
 import { withHyperdriveSessions, type HyperdriveBinding } from "./hyperdrive.ts";
@@ -10,6 +11,7 @@ interface Env extends GrafanaEnv {
   LEGACY_CPF_KEY?: string;
   TARGET_DB: HyperdriveBinding;
   FIREBASE_PROJECT_ID: string;
+  FIRESTORE_DATABASE_ID?: string;
   FIREBASE_CREDENTIALS_BASE64: string;
   API_ENABLED?: string;
   JOBS_ENABLED?: string;
@@ -35,9 +37,15 @@ async function execute(env: Env, dryRun: boolean): Promise<SyncSummary> {
   }
   const credential = await observe("firebase_configuration", "firebase", () => parseServiceAccount(env.FIREBASE_CREDENTIALS_BASE64, env.FIREBASE_PROJECT_ID));
   const firebase = new FirebaseAuthClient(env.FIREBASE_PROJECT_ID, credential, dryRun);
-  return withHyperdriveSessions(env.LEGACY_DB, env.TARGET_DB, dryRun, (legacy, destination) =>
-    runUserSync({ legacy, destination, firebase, batchSize: batchSize(env), dryRun, legacyCpfKey: env.LEGACY_CPF_KEY }),
-  );
+  const state = new FirestoreState(env.FIREBASE_PROJECT_ID, env.FIRESTORE_DATABASE_ID ?? "(default)", firebase);
+  try {
+    const result = await withHyperdriveSessions(env.LEGACY_DB, env.TARGET_DB, dryRun, (legacy, destination) =>
+      runUserSync({ legacy, destination, firebase, state, batchSize: batchSize(env), dryRun, legacyCpfKey: env.LEGACY_CPF_KEY }),
+    );
+    if (!dryRun) await state.flush();
+    return result;
+  } finally { await state.release(); }
+
 }
 
 function authorized(request: Request, env: Env): boolean {

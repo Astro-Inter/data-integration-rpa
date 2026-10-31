@@ -1,3 +1,4 @@
+from memory_firestore import MemoryFirestore
 """Alertas sanitizados e atribuição de falhas; SMTP e integrações simulados."""
 
 from dataclasses import replace
@@ -18,6 +19,9 @@ import test_settings
 
 class FailureAlertTests(unittest.TestCase):
     def setUp(self):
+        firestore_patch = patch("app.main.firestore.client", return_value=MemoryFirestore())
+        firestore_patch.start()
+        self.addCleanup(firestore_patch.stop)
         self.settings = test_settings.SettingsTests().load(
             EMAIL_ALERTS_ENABLED="true", SMTP_PASSWORD="senha-app-ficticia",
         )
@@ -124,8 +128,9 @@ class FailureAlertTests(unittest.TestCase):
         with patch("app.main.Settings", return_value=self.settings), \
              patch("app.main.open_integrations"), \
              patch("app.main.LegacyUserRepository") as legacy, \
-             patch("app.main.SyncStateRepository") as state:
+             patch("app.main.FirestoreSyncState") as state:
             legacy.return_value.iter_batches.return_value = [[invalid, replace(invalid, id_funcionario=2)]]
+            state.return_value.__enter__.return_value = state.return_value
             state.return_value.confirmed_hashes.return_value = {}
             state.return_value.last_synced_at.return_value = None
             with self.assertLogs(level="INFO"):

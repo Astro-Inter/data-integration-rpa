@@ -12,17 +12,21 @@ class TargetIdentityError(RuntimeError):
 
 
 class TargetUserRepository:
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: Connection, state=None):
+        self.state = state
         self.connection = connection
 
     def _identity(self, user: PreparedUser, uid: str | None = None):
         if not self.connection.in_transaction():
             raise TargetIdentityError("A persistência exige transação externa.")
         params = {"cpf": user.usuario.cpf, "email": user.usuario.email, "uid": uid}
-        link = self.connection.execute(select(user_links).where(
-            user_links.c.integration_key == INTEGRATION_KEY,
-            user_links.c.legacy_id == user.legacy_id,
-        )).mappings().one_or_none()
+        if self.state is not None:
+            link = self.state.get_link(user.legacy_id)
+        else:
+            link = self.connection.execute(select(user_links).where(
+                user_links.c.integration_key == INTEGRATION_KEY,
+                user_links.c.legacy_id == user.legacy_id,
+            )).mappings().one_or_none()
         params["linked_id"] = link["target_id"] if link else None
         # Herança PostgreSQL não estende UNIQUE entre conta, usuario e admin.
         # ONLY evita que a consulta de conta inclua os próprios usuario.
@@ -51,13 +55,16 @@ class TargetUserRepository:
                 raise TargetIdentityError("CPF diverge da identidade localizada. Revisão necessária.")
             if not row["firebase_uid"] or (uid is not None and row["firebase_uid"] != uid):
                 raise TargetIdentityError("UID diverge da identidade localizada no destino.")
-            other = self.connection.execute(select(user_links.c.legacy_id).where(
-                user_links.c.target_id == row["id_usuario"],
-                (user_links.c.legacy_id != user.legacy_id) |
-                (user_links.c.integration_key != INTEGRATION_KEY),
-            )).first()
-            if other:
-                raise TargetIdentityError("Usuário destino já vinculado a outro registro de origem.")
+            if self.state is not None:
+                self.state.check_link(user.legacy_id, row["id_usuario"], row["firebase_uid"])
+            else:
+                other = self.connection.execute(select(user_links.c.legacy_id).where(
+                    user_links.c.target_id == row["id_usuario"],
+                    (user_links.c.legacy_id != user.legacy_id) |
+                    (user_links.c.integration_key != INTEGRATION_KEY),
+                )).first()
+                if other:
+                    raise TargetIdentityError("Usuário destino já vinculado a outro registro de origem.")
             workspace = self.connection.execute(text("""
                 SELECT wc.cnpj AS cargo_cnpj, wu.cnpj AS unidade_cnpj
                 FROM cargo c JOIN workspace wc ON wc.id_workspace = c.workspace_id
@@ -98,14 +105,17 @@ class TargetUserRepository:
                     firebase_uid=:firebase_uid, cargo_id=:cargo_id, unidade_id=:unidade_id
                 WHERE id_usuario=:id
             """), updates | {"id": target_id})
-        if not self.connection.execute(select(user_links.c.target_id).where(
-            user_links.c.integration_key == INTEGRATION_KEY,
-            user_links.c.legacy_id == user.legacy_id,
-        )).first():
-            self.connection.execute(user_links.insert().values(
-                integration_key=INTEGRATION_KEY, legacy_id=user.legacy_id,
-                target_id=target_id, firebase_uid=uid,
-            ))
+        if self.state is not None:
+            self.state.stage_link(user.legacy_id, target_id, uid)
+        else:
+            if not self.connection.execute(select(user_links.c.target_id).where(
+                user_links.c.integration_key == INTEGRATION_KEY,
+                user_links.c.legacy_id == user.legacy_id,
+            )).first():
+                self.connection.execute(user_links.insert().values(
+                    integration_key=INTEGRATION_KEY, legacy_id=user.legacy_id,
+                    target_id=target_id, firebase_uid=uid,
+                ))
 
     def _organization(self, table: str, id_column: str, payload: dict) -> int:
         # Identificadores são constantes internas, nunca conteúdo do legado.

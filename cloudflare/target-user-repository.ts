@@ -1,3 +1,4 @@
+import type { SyncState } from "./firestore-state.ts";
 import {
   organizationPayload,
   targetInsertPayload,
@@ -29,15 +30,16 @@ function integer(value: number | string): number {
 
 export class TargetUserRepository {
   private readonly database: SqlClient;
-  constructor(database: SqlClient) { this.database = database; }
+  private state?: SyncState;
+  constructor(database: SqlClient, state?: SyncState) { this.database = database; this.state = state; }
 
   private async identity(user: PreparedUser, uid: string | null): Promise<ExistingUser | null> {
-    const { rows: linkRows } = await this.database.query<Link>(
+    const { rows: linkRows } = this.state ? { rows: [] } : await this.database.query<Link>(
       `SELECT target_id, firebase_uid FROM rpa_user_links
        WHERE integration_key = $1 AND legacy_id = $2`,
       [INTEGRATION_KEY, user.legacy_id],
     );
-    const link = linkRows[0] ?? null;
+    const link = this.state ? await this.state.getLink(user.legacy_id) : linkRows[0] ?? null;
     const email = user.usuario.email;
     for (const table of ["admin", "ONLY conta"]) {
       const { rows } = await this.database.query(
@@ -65,7 +67,8 @@ export class TargetUserRepository {
       throw new TargetIdentityError("UID diverge da identidade localizada no destino.");
     }
 
-    const { rows: otherLinks } = await this.database.query<{ legacy_id: number | string }>(
+    if (this.state) await this.state.checkLink(user.legacy_id, integer(row.id_usuario), row.firebase_uid);
+    const { rows: otherLinks } = this.state ? { rows: [] } : await this.database.query<{ legacy_id: number | string }>(
       `SELECT legacy_id FROM rpa_user_links WHERE target_id = $1
        AND (legacy_id <> $2 OR integration_key <> $3)`,
       [integer(row.id_usuario), user.legacy_id, INTEGRATION_KEY],
@@ -125,6 +128,10 @@ export class TargetUserRepository {
       );
     }
 
+    if (this.state) {
+      await this.state.stageLink(user.legacy_id, targetId, uid);
+      return;
+    }
     const { rows: links } = await this.database.query(
       `SELECT target_id FROM rpa_user_links WHERE integration_key = $1 AND legacy_id = $2`,
       [INTEGRATION_KEY, user.legacy_id],

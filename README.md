@@ -236,3 +236,9 @@ com o `.env` preenchido, serviços acessíveis e `SYNC_DRY_RUN=true`.
 ## Diagnóstico operacional
 
 Consulte [os campos e limites dos novos diagnósticos](docs/observability-diagnostics.md) para investigar falhas por requisição ou execução no Grafana.
+
+## Controle de sincronização no Firestore
+
+A execução Python e o Worker usam Firestore para hashes, vínculos e exclusão
+mútua, sem exigir tabelas `rpa_*` no PostgreSQL. Consulte
+[Controle no Firestore](docs/controle-firestore.md) antes de ativar gravações.
