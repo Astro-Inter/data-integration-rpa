@@ -8,7 +8,13 @@ const config = JSON.parse(readFileSync(join(root, "wrangler.jsonc"), "utf8"));
 const bindings = new Map((config.hyperdrive ?? []).map((item) => [item.binding, item.id]));
 const validId = (id) => typeof id === "string" && /^[a-f0-9]{32}$/iu.test(id) && !/^0+$/u.test(id);
 const safe = !Object.hasOwn(config, "limits")
-  && config.observability?.enabled === false
+  && config.observability?.enabled === true
+  && config.observability.logs?.enabled === true
+  && config.observability.logs?.invocation_logs === false
+  && config.observability.logs?.persist === false
+  && config.observability.logs?.head_sampling_rate === 1
+  && JSON.stringify(config.observability.logs?.destinations) === JSON.stringify(['astro-grafana-logs'])
+  && !config.observability.traces
   && ["false", "true"].includes(config.vars?.API_ENABLED)
   && config.vars?.JOBS_ENABLED === "true"
   && config.vars?.SYNC_DRY_RUN === "true"
@@ -19,7 +25,7 @@ const safe = !Object.hasOwn(config, "limits")
   && validId(bindings.get("TARGET_DB"));
 
 if (!safe) {
-  console.error("Deploy blocked: expected Worker Free defaults, hourly dry-run Cron, no production writes, and valid existing Hyperdrive bindings.");
+  console.error("Deploy blocked: expected Worker Free defaults, Grafana-only logs without persistence, hourly dry-run Cron, no production writes, and valid existing Hyperdrive bindings.");
   process.exit(1);
 }
 
