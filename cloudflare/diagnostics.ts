@@ -1,6 +1,14 @@
 export type DiagnosticFields = Record<string, string | number | boolean>;
 
 const descriptions: Record<string, string> = {
+  FIRESTORE_HTTP_401: "Firestore recusou a autenticação da conta de serviço",
+  FIRESTORE_HTTP_403: "Firestore recusou o acesso; confira IAM, projeto e API habilitada",
+  FIRESTORE_HTTP_409: "Conflito no Firestore; confira execução concorrente ou lock existente",
+  FIRESTORE_HTTP_429: "Limite de requisições Firestore atingido",
+  FIRESTORE_AUTH_FAILED: "Falha ao obter token para acessar Firestore",
+  FIRESTORE_NETWORK_FAILED: "Falha de comunicação com Firestore",
+  FIRESTORE_TIMEOUT: "Prazo de requisição Firestore excedido",
+  FIRESTORE_INVALID_RESPONSE: "Resposta Firestore inválida",
   "53300": "Limite de conexões PostgreSQL atingido",
   "57014": "Consulta PostgreSQL cancelada ou prazo excedido",
   "42P01": "Relação PostgreSQL não encontrada",

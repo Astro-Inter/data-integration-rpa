@@ -1,6 +1,41 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FirestoreState } from "./firestore-state.ts";
+import { diagnostic } from "./diagnostics.ts";
+
+test("Firestore HTTP failures identify stage and status without leaking provider details", async () => {
+  for (const status of [401, 403, 429, 500]) {
+    const state = new FirestoreState("project-test", "(default)", { oauthToken: async () => "secret-token" },
+      (async () => new Response("secret provider body", { status })) as typeof fetch);
+    await assert.rejects(state.lastSyncedAt(), error => {
+      const fields = diagnostic(error);
+      assert.equal(fields.error_code, `FIRESTORE_HTTP_${status}`);
+      assert.equal(fields.stage, "firestore_read");
+      assert.equal(fields.dependency, "firestore");
+      assert.ok(!JSON.stringify(fields).includes("secret"));
+      return true;
+    });
+  }
+});
+
+test("Firestore distinguishes OAuth, timeout, network and JSON failures", async () => {
+  const cases = [
+    { auth: async () => { throw new Error("secret credential"); }, fetcher: async () => Response.json({}), code: "FIRESTORE_AUTH_FAILED" },
+    { auth: async () => "token", fetcher: async () => { throw new DOMException("secret", "TimeoutError"); }, code: "FIRESTORE_TIMEOUT" },
+    { auth: async () => "token", fetcher: async () => { throw new Error("secret network host"); }, code: "FIRESTORE_NETWORK_FAILED" },
+    { auth: async () => "token", fetcher: async () => new Response("not json"), code: "FIRESTORE_INVALID_RESPONSE" },
+  ];
+  for (const item of cases) {
+    const state = new FirestoreState("project-test", "(default)", { oauthToken: item.auth }, item.fetcher as typeof fetch);
+    await assert.rejects(state.lastSyncedAt(), error => {
+      const fields = diagnostic(error);
+      assert.equal(fields.error_code, item.code);
+      assert.equal(fields.stage, "firestore_read");
+      assert.ok(!JSON.stringify(fields).includes("secret"));
+      return true;
+    });
+  }
+});
 
 function fixture() {
   const docs = new Map<string, Record<string, unknown>>();
