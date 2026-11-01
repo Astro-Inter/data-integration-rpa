@@ -1,5 +1,15 @@
 import type { FirebaseAuthClient } from "./firebase-auth.ts";
 import type { SyncStateRepository } from "./repositories.ts";
+import { observe } from "./diagnostics.ts";
+
+export class FirestoreRequestError extends Error {
+  readonly code: string;
+  constructor(code: string) {
+    super("Falha no controle Firestore; consulte o código e a etapa registrados.");
+    this.name = "FirestoreRequestError";
+    this.code = code;
+  }
+}
 
 export type Link = { target_id: number; firebase_uid: string };
 export type SyncState = Pick<SyncStateRepository, "lastSyncedAt" | "confirmedHashes" | "lockSync" | "confirmUser" | "confirmRun"> & {
@@ -28,15 +38,26 @@ export class FirestoreState implements SyncState {
     this.integration = `${this.root}/rpa_integracoes/usuarios_legado`;
   }
   private async request(path: string, method = "GET", body?: unknown): Promise<Document> {
-    try {
-      const response = await this.fetcher(`https://firestore.googleapis.com/v1/${path}`, {
-        method, headers: { Authorization: `Bearer ${await this.auth.oauthToken()}`, "Content-Type": "application/json" },
+    const stage = method === "GET" ? "firestore_read" : method === "DELETE" ? "firestore_unlock" : "firestore_write";
+    return observe(stage, "firestore", async () => {
+      let token: string;
+      try { token = await this.auth.oauthToken(); }
+      catch { throw new FirestoreRequestError("FIRESTORE_AUTH_FAILED"); }
+      let response: Response;
+      try {
+        response = await this.fetcher(`https://firestore.googleapis.com/v1/${path}`, {
+        method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(10000),
-      });
+        });
+      } catch (error) {
+        throw new FirestoreRequestError(error instanceof Error && /^(TimeoutError|AbortError)$/.test(error.name)
+          ? "FIRESTORE_TIMEOUT" : "FIRESTORE_NETWORK_FAILED");
+      }
       if (response.status === 404 && method === "GET") return {};
-      if (!response.ok) throw new Error();
-      return await response.json() as Document;
-    } catch { throw new Error("Falha no controle Firestore; verifique IAM, conexão e rpa_locks."); }
+      if (!response.ok) throw new FirestoreRequestError(`FIRESTORE_HTTP_${response.status}`);
+      try { return await response.json() as Document; }
+      catch { throw new FirestoreRequestError("FIRESTORE_INVALID_RESPONSE"); }
+    });
   }
   async lastSyncedAt(): Promise<string | null> {
     const doc = await this.request(this.integration);
