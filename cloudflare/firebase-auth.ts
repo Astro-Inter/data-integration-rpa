@@ -71,7 +71,8 @@ export class FirebaseAuthClient {
     this.projectId = projectId;
     this.credential = credential;
     this.dryRun = dryRun;
-    this.fetcher = fetcher;
+    // Native workerd fetch must not receive this client as its receiver.
+    this.fetcher = (input, init) => fetcher(input, init);
   }
 
   async oauthToken(): Promise<string> {

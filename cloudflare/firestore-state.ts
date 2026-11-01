@@ -32,7 +32,8 @@ export class FirestoreState implements SyncState {
   private auth: Pick<FirebaseAuthClient, "oauthToken">;
   private fetcher: typeof fetch;
   constructor(project: string, database: string, auth: Pick<FirebaseAuthClient, "oauthToken">, fetcher: typeof fetch = fetch) {
-    this.auth = auth; this.fetcher = fetcher;
+    this.auth = auth;
+    this.fetcher = (input, init) => fetcher(input, init);
     if (!project || !database || database.includes("/")) throw new Error("Configuração Firestore inválida.");
     this.root = `projects/${project}/databases/${database}/documents`;
     this.integration = `${this.root}/rpa_integracoes/usuarios_legado`;
